@@ -11,7 +11,7 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.15 0.02 240);
   /* Restored darker navy blue primary color */
-  --primary: oklch(34.292% 0.09935 252.582); /* Deep navy blue */
+  --primary: oklch(38.415% 0.1087 252.5); /* Deep navy blue */
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.35 0.18 220); /* Darker blue accent */
   --secondary-foreground: oklch(1 0 0);

@@ -4,9 +4,11 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Search, MapPin, Users, Star, Heart, ArrowRight, CheckCircle, Shield, Clock } from "lucide-react"
 import Link from "next/link"
+import { cookies } from "next/headers"
 
 export default async function HomePage() {
-   
+   const cookieStore = cookies();
+  const isLoggedIn = cookieStore.has("token");
    
   return (
     <div className="min-h-screen bg-background">
@@ -36,13 +38,28 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            <div className="flex items-center space-x-4 animate-fade-in">
-              <Button variant="ghost" size="sm" className="smooth-transition" asChild>
-                <Link href="/auth/login">Sign In</Link>
-              </Button>
-              <Button size="sm" className="bg-primary hover:bg-primary/90 smooth-transition hover-lift" asChild>
-                <Link href="/auth/signup">Get Started</Link>
-              </Button>
+             <div className="flex items-center space-x-4 animate-fade-in">
+              {!isLoggedIn ? (
+                <>
+                  <Button variant="ghost" size="sm" className="smooth-transition" asChild>
+                    <Link href="/auth/login">Sign In</Link>
+                  </Button>
+                  <Button size="sm" className="bg-primary hover:bg-primary/90 smooth-transition hover-lift" asChild>
+                    <Link href="/auth/signup">Get Started</Link>
+                  </Button>
+                </>
+              ) : (
+                <form action="/auth/login" method="POST">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="smooth-transition"
+                    type="submit"
+                  >
+                    Logout
+                  </Button>
+                </form>
+              )}
             </div>
           </div>
         </div>
@@ -384,7 +401,7 @@ export default async function HomePage() {
           </div>
 
           <div className="border-t border-border mt-8 pt-8 text-center text-muted-foreground">
-            <p>&copy; 2024 RoomMate TN. Made with ❤️ for Tunisian students.</p>
+            <p>&copy; 2025 RoomMate TN. Made with ❤️ for Tunisian students.</p>
           </div>
         </div>
       </footer>
