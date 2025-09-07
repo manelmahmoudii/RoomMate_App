@@ -90,20 +90,31 @@ export default function LoginPage() {
       if (rememberMe) {
         localStorage.setItem("user", JSON.stringify(data.user))
         localStorage.setItem("rememberMe", "true")
+        localStorage.setItem("token", data.token || data.accessToken)
       } else {
         sessionStorage.setItem("user", JSON.stringify(data.user))
+        sessionStorage.setItem("token", data.token || data.accessToken)
       }
 
-      // Redirect based on user type
+      // Redirect based on actual user role from API response
+      // Use the role from the response instead of the selected tab
+      const userRole = data.user?.role || data.user?.userType || userType
+      
       let redirectPath = "/"
-      if (userType === "admin") redirectPath = "/admin"
-      else if (userType === "advertiser") redirectPath = "/dashboard"
+      if (userRole === "admin" || userRole === "administrator") {
+        redirectPath = "/admin/dashboard"
+      } else if (userRole === "advertiser" || userRole === "property_owner" || userRole === "agency") {
+        redirectPath = "/dashboard/advertiser"
+      } else if (userRole === "student") {
+        redirectPath = "/dashboard/student"
+      }
 
+      console.log(`Redirecting ${userRole} to: ${redirectPath}`)
       router.push(redirectPath)
 
     } catch (error) {
-      console.error(error)
-      setErrors({ general: "An error occurred during login" })
+      console.error("Login error:", error)
+      setErrors({ general: "An error occurred during login. Please try again." })
     } finally {
       setLoading(false)
     }
@@ -132,7 +143,7 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent className="space-y-6">
-            <Tabs value={userType}  onValueChange={(value) => setUserType(value as "student" | "advertiser")} className="w-full">
+            <Tabs value={userType} onValueChange={(value) => setUserType(value as "student" | "advertiser" | "admin")} className="w-full">
               <TabsList className="grid w-full grid-cols-3 bg-muted">
                 <TabsTrigger value="student" className="flex items-center text-xs">
                   <Users className="w-4 h-4 mr-1" /> 

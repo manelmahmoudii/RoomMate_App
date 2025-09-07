@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Search, MapPin, Users, Star, Heart, ArrowRight, CheckCircle, Shield, Clock } from "lucide-react"
 import Link from "next/link"
 import { cookies } from "next/headers"
+import Header from "./header/page"
 
 export default async function HomePage() {
    const cookieStore = cookies();
@@ -13,57 +14,7 @@ export default async function HomePage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
-      <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 smooth-transition">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2 animate-fade-in">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center animate-float">
-                <Users className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">RoomMate TN</span>
-            </div>
-
-            <div className="hidden md:flex items-center space-x-8 animate-fade-in">
-              <Link href="/search" className="text-muted-foreground hover:text-foreground smooth-transition">
-                Search Rooms
-              </Link>
-              <Link
-                href="/dashboard/advertiser"
-                className="text-muted-foreground hover:text-foreground smooth-transition"
-              >
-                Post Room
-              </Link>
-              <Link href="/about" className="text-muted-foreground hover:text-foreground smooth-transition">
-                About
-              </Link>
-            </div>
-
-             <div className="flex items-center space-x-4 animate-fade-in">
-              {!isLoggedIn ? (
-                <>
-                  <Button variant="ghost" size="sm" className="smooth-transition" asChild>
-                    <Link href="/auth/login">Sign In</Link>
-                  </Button>
-                  <Button size="sm" className="bg-primary hover:bg-primary/90 smooth-transition hover-lift" asChild>
-                    <Link href="/auth/signup">Get Started</Link>
-                  </Button>
-                </>
-              ) : (
-                <form action="/auth/login" method="POST">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="smooth-transition"
-                    type="submit"
-                  >
-                    Logout
-                  </Button>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+       <Header isLoggedIn={isLoggedIn} />
 
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-secondary/5">
