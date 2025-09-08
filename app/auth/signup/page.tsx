@@ -249,8 +249,11 @@ export default function SignupPage() {
 
           <CardContent className="space-y-6">
             {/* User Type Selection */}
-            <Tabs value={userType}   onValueChange={(value) => setUserType(value as "student" | "advertiser")}
- className="w-full">
+            <Tabs
+              value={userType}
+              onValueChange={(value) => setUserType(value as "student" | "advertiser")}
+              className="w-full"
+            >
               <TabsList className="grid w-full grid-cols-2 bg-muted">
                 <TabsTrigger value="student" className="flex items-center">
                   <Users className="w-4 h-4 mr-2" />
@@ -270,8 +273,8 @@ export default function SignupPage() {
                   <p className="text-xs text-muted-foreground mt-2">Looking for roommates and shared spaces</p>
                 </div>
 
-                {/* Student Form */}
-                <form onSubmit={handleSignup} className="space-y-4">
+                {/* Student Form Fields */}
+                <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="firstName" className="text-foreground font-medium">
@@ -408,7 +411,7 @@ export default function SignupPage() {
                       onChange={(e) => handleInputChange("bio", e.target.value)}
                     />
                   </div>
-                </form>
+                </div>
               </TabsContent>
 
               <TabsContent value="advertiser" className="space-y-4 mt-6">
@@ -419,8 +422,8 @@ export default function SignupPage() {
                   <p className="text-xs text-muted-foreground mt-2">Posting rooms and shared spaces</p>
                 </div>
 
-                {/* Advertiser Form */}
-                <form onSubmit={handleSignup} className="space-y-4">
+                {/* Advertiser Form Fields */}
+                <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="advFirstName" className="text-foreground font-medium">
@@ -550,11 +553,11 @@ export default function SignupPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                </form>
+                </div>
               </TabsContent>
             </Tabs>
 
-            {/* Password Fields */}
+            {/* Password Fields and Terms (Shared) */}
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-foreground font-medium">

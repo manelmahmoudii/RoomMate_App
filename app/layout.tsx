@@ -28,7 +28,7 @@ export default async function RootLayout({
     cookies: {
       get: (name: string) => {
         const cookie = cookieHeader?.split(';').find(c => c.trim().startsWith(name + '='));
-        return cookie ? { value: cookie.split('=')[1] } : undefined;
+        return cookie ? { value: cookie.trim().substring(name.length + 1) } : undefined;
       }
     }
   } as unknown as NextRequest; // Cast to NextRequest

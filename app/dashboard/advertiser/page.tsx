@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,11 +30,101 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 
+interface User {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  user_type: string;
+  avatar_url: string;
+  created_at: string;
+  status: 'active' | 'suspended';
+  totalReviews?: number; // Added totalReviews
+  rating?: number; // Added rating
+  phone?: string;
+  location?: string;
+}
+
+interface Listing {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  city: string;
+  number_of_roommates: number;
+  amenities: string;
+  images: string;
+  status: 'pending' | 'active' | 'rejected';
+  created_at: string;
+  views?: number; // Added views
+  requests?: number; // Added requests
+}
+
+interface Request {
+  id: string;
+  student_id: string;
+  listing_id: string;
+  message: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+  student_first_name: string;
+  student_last_name: string;
+  student_avatar_url: string;
+  listing_title: string;
+}
+
+interface Analytics {
+  totalViews: number;
+  totalRequests: number;
+  activeListings: number;
+  averageRating: number; // Assuming this is calculated or fetched
+  monthlyEarnings: number;
+  responseRate: number;
+}
+
 export default function AdvertiserDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
   const [showAddListing, setShowAddListing] = useState(false)
+  const [advertiserProfile, setAdvertiserProfile] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [requests, setRequests] = useState<Request[]>([]);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [showEditListing, setShowEditListing] = useState(false);
+  const [editingListing, setEditingListing] = useState<Listing | null>(null);
+  const [newListingForm, setNewListingForm] = useState({
+    title: "",
+    description: "",
+    price: "",
+    city: "",
+    number_of_roommates: "1",
+    amenities: [],
+    images: [],
+  });
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  // Mock advertiser data
+  const getListingImageUrl = (imagesString: string) => {
+    try {
+      const images = JSON.parse(imagesString);
+      return (Array.isArray(images) && images.length > 0) ? images[0] : "/placeholder.svg";
+    } catch (error) {
+      console.error("Error parsing images JSON for listing:", imagesString, error);
+      return "/placeholder.svg";
+    }
+  };
+
+  const getListingImagesArray = (imagesString: string) => {
+    try {
+      const images = JSON.parse(imagesString);
+      return (Array.isArray(images) && images.length > 0) ? images : [];
+    } catch (error) {
+      console.error("Error parsing images JSON for editing listing:", imagesString, error);
+      return [];
+    }
+  };
+
+  // Mock advertiser data - will be replaced by fetched data
   const advertiser = {
     name: "Amira Ben Salem",
     email: "amira.bensalem@email.com",
@@ -48,6 +138,8 @@ export default function AdvertiserDashboard() {
     totalReviews: 47,
   }
 
+  // Removed: Mock listings data
+  /*
   const listings = [
     {
       id: 1,
@@ -89,7 +181,10 @@ export default function AdvertiserDashboard() {
       rating: 0,
     },
   ]
+  */
 
+  // Removed: Mock requests data
+  /*
   const requests = [
     {
       id: 1,
@@ -130,7 +225,10 @@ export default function AdvertiserDashboard() {
       budget: 350,
     },
   ]
+  */
 
+  // Removed: Mock analytics data
+  /*
   const analytics = {
     totalViews: 268,
     totalRequests: 15,
@@ -139,6 +237,7 @@ export default function AdvertiserDashboard() {
     monthlyEarnings: 640,
     responseRate: 95,
   }
+  */
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -167,6 +266,303 @@ export default function AdvertiserDashboard() {
         return <Clock className="w-4 h-4" />
     }
   }
+
+  const fetchAdvertiserProfile = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/auth/session");
+      if (response.ok) {
+        const data = await response.json();
+        setAdvertiserProfile(data);
+      } else {
+        console.error("Failed to fetch advertiser profile:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching advertiser profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchListings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/listings"); // Assuming this fetches listings for the current user
+      if (response.ok) {
+        const data = await response.json();
+        setListings(data);
+      } else {
+        console.error("Failed to fetch listings:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching listings:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchRequests = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/advertiser/requests");
+      if (response.ok) {
+        const data = await response.json();
+        setRequests(data);
+      } else {
+        console.error("Failed to fetch requests:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching requests:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchAnalytics = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/advertiser/analytics");
+      if (response.ok) {
+        const data = await response.json();
+        setAnalytics(data);
+      } else {
+        console.error("Failed to fetch analytics:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setSelectedImageFile(null);
+      setImagePreview(null);
+    }
+  };
+
+  const handleListingDelete = useCallback(async (listingId: string) => {
+    if (!window.confirm("Are you sure you want to delete this listing?")) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/listings/${listingId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setListings((prevListings) => prevListings.filter((listing) => listing.id !== listingId));
+        alert("Listing deleted successfully!");
+        fetchListings(); // Refresh listings after deletion
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to delete listing: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error deleting listing:", error);
+      alert("An error occurred while deleting the listing.");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchListings]);
+
+  const handleListingUpdate = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingListing) return;
+
+    setLoading(true);
+    try {
+      const updatedData = {
+        title: (document.getElementById("editTitle") as HTMLInputElement).value,
+        description: (document.getElementById("editDescription") as HTMLTextAreaElement).value,
+        price: parseFloat((document.getElementById("editPrice") as HTMLInputElement).value),
+        city: (document.getElementById("editLocation") as HTMLSelectElement).value,
+        number_of_roommates: parseInt((document.getElementById("editRoommates") as HTMLSelectElement).value),
+        // amenities and images would need more complex handling (e.g., file uploads, multi-select)
+        // For now, we'll assume they are not being updated via this simple form
+      };
+
+      const response = await fetch(`/api/listings/${editingListing.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedData),
+      });
+
+      if (response.ok) {
+        alert("Listing updated successfully!");
+        setShowEditListing(false);
+        setEditingListing(null);
+        fetchListings(); // Refresh listings after update
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to update listing: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error updating listing:", error);
+      alert("An error occurred while updating the listing.");
+    } finally {
+      setLoading(false);
+    }
+  }, [editingListing, fetchListings]);
+
+  const handleAddListing = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    let imageUrl = null;
+    if (selectedImageFile) {
+      const formData = new FormData();
+      formData.append("file", selectedImageFile);
+
+      try {
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (uploadResponse.ok) {
+          const uploadData = await uploadResponse.json();
+          imageUrl = uploadData.imageUrl;
+        } else {
+          const errorData = await uploadResponse.json();
+          alert(`Failed to upload image: ${errorData.message || uploadResponse.statusText}`);
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        alert("An error occurred while uploading the image.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch("/api/listings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newListingForm.title,
+          description: newListingForm.description,
+          price: parseFloat(newListingForm.price),
+          city: newListingForm.city,
+          number_of_roommates: parseInt(newListingForm.number_of_roommates),
+          amenities: newListingForm.amenities, 
+          images: imageUrl ? [imageUrl] : [], // Pass the uploaded image URL
+        }),
+      });
+
+      if (response.ok) {
+        alert("Listing added successfully! Awaiting admin approval.");
+        setShowAddListing(false);
+        setNewListingForm({
+          title: "",
+          description: "",
+          price: "",
+          city: "",
+          number_of_roommates: "1",
+          amenities: [],
+          images: [],
+        });
+        setSelectedImageFile(null);
+        setImagePreview(null);
+        fetchListings(); // Refresh listings after adding new one
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to add listing: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error adding listing:", error);
+      alert("An error occurred while adding the listing.");
+    } finally {
+      setLoading(false);
+    }
+  }, [newListingForm, selectedImageFile, fetchListings]);
+
+  const handleAcceptRequest = useCallback(async (requestId: string) => {
+    if (!window.confirm("Are you sure you want to accept this request?")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/advertiser/requests/${requestId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "accepted" }),
+      });
+
+      if (response.ok) {
+        alert("Request accepted successfully!");
+        fetchRequests(); // Refresh requests
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to accept request: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error accepting request:", error);
+      alert("An error occurred while accepting the request.");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchRequests]);
+
+  const handleDeclineRequest = useCallback(async (requestId: string) => {
+    if (!window.confirm("Are you sure you want to decline this request?")) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/advertiser/requests/${requestId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "rejected" }),
+      });
+
+      if (response.ok) {
+        alert("Request declined successfully!");
+        fetchRequests(); // Refresh requests
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to decline request: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error declining request:", error);
+      alert("An error occurred while declining the request.");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchRequests]);
+
+  const handleMessageStudent = useCallback(async (studentId: string, listingId: string) => {
+    // For now, let's just log and alert. In a real app, this would open a chat modal or navigate to a chat page.
+    alert(`Initiating chat with student ID: ${studentId} about listing ID: ${listingId}`);
+    console.log(`Messaging student ${studentId} for listing ${listingId}`);
+    // Implement actual messaging logic here later, potentially navigating to a chat page
+    // router.push(`/dashboard/messages?studentId=${studentId}&listingId=${listingId}`);
+  }, []);
+
+  const handleEditListing = useCallback((listing: Listing) => {
+    setEditingListing(listing);
+    setShowEditListing(true);
+  }, []);
+
+  useEffect(() => {
+    fetchAdvertiserProfile();
+    fetchListings();
+    fetchRequests();
+    fetchAnalytics();
+  }, [fetchAdvertiserProfile, fetchListings, fetchRequests, fetchAnalytics]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -206,8 +602,8 @@ export default function AdvertiserDashboard() {
                     <div className="flex items-center gap-1 mt-1">
                       <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
                       {/* Assuming rating will come from analytics or a separate profile endpoint */}
-                      <span className="text-sm font-medium">{advertiser.rating}</span>
-                      <span className="text-xs text-muted-foreground">({advertiser.totalReviews})</span>
+                      <span className="text-sm font-medium">{advertiserProfile?.rating || 0}</span>
+                      <span className="text-xs text-muted-foreground">({advertiserProfile?.totalReviews || 0})</span>
                     </div>
                   </div>
                 </div>
@@ -278,7 +674,7 @@ export default function AdvertiserDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground">Active Listings</p>
-                          <p className="text-2xl font-bold text-foreground">{analytics.activeListings}</p>
+                          <p className="text-2xl font-bold text-foreground">{analytics?.activeListings || 0}</p>
                         </div>
                         <Home className="w-8 h-8 text-primary" />
                       </div>
@@ -290,7 +686,7 @@ export default function AdvertiserDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground">Total Views</p>
-                          <p className="text-2xl font-bold text-foreground">{analytics.totalViews}</p>
+                          <p className="text-2xl font-bold text-foreground">{analytics?.totalViews || 0}</p>
                         </div>
                         <Eye className="w-8 h-8 text-primary" />
                       </div>
@@ -316,7 +712,7 @@ export default function AdvertiserDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground">Average Rating</p>
-                          <p className="text-2xl font-bold text-foreground">{analytics.averageRating}</p>
+                          <p className="text-2xl font-bold text-foreground">{analytics?.averageRating || 0}</p>
                         </div>
                         <Star className="w-8 h-8 text-primary" />
                       </div>
@@ -328,7 +724,7 @@ export default function AdvertiserDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground">Monthly Earnings</p>
-                          <p className="text-2xl font-bold text-foreground">{analytics.monthlyEarnings} TND</p>
+                          <p className="text-2xl font-bold text-foreground">{analytics?.monthlyEarnings || 0} TND</p>
                         </div>
                         <DollarSign className="w-8 h-8 text-primary" />
                       </div>
@@ -340,7 +736,7 @@ export default function AdvertiserDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground">Response Rate</p>
-                          <p className="text-2xl font-bold text-foreground">{analytics.responseRate}%</p>
+                          <p className="text-2xl font-bold text-foreground">{analytics?.responseRate || 0}%</p>
                         </div>
                         <TrendingUp className="w-8 h-8 text-primary" />
                       </div>
@@ -355,27 +751,16 @@ export default function AdvertiserDashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                      {loading && <p>Loading recent activity...</p>}
+                      {!loading && requests.slice(0, 3).map((request, index) => (
+                        <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
                         <MessageCircle className="w-5 h-5 text-primary" />
                         <div>
-                          <p className="text-sm text-foreground">New request from Ahmed Ben Ali</p>
-                          <p className="text-xs text-muted-foreground">2 hours ago</p>
+                            <p className="text-sm text-foreground">New request from {request.student_first_name} {request.student_last_name}</p>
+                            <p className="text-xs text-muted-foreground">{new Date(request.created_at).toLocaleDateString()}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                        <Eye className="w-5 h-5 text-primary" />
-                        <div>
-                          <p className="text-sm text-foreground">Your listing got 12 new views</p>
-                          <p className="text-xs text-muted-foreground">1 day ago</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                        <CheckCircle className="w-5 h-5 text-green-500" />
-                        <div>
-                          <p className="text-sm text-foreground">Listing approved and published</p>
-                          <p className="text-xs text-muted-foreground">3 days ago</p>
-                        </div>
-                      </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
@@ -398,7 +783,7 @@ export default function AdvertiserDashboard() {
                     <Card key={listing.id} className="group hover:shadow-lg transition-shadow">
                       <div className="relative">
                         <img
-                          src={listing.image || "/placeholder.svg"}
+                          src={getListingImageUrl(listing.images)} // Assuming images is an array
                           alt={listing.title}
                           className="w-full h-48 object-cover rounded-t-lg"
                         />
@@ -412,42 +797,41 @@ export default function AdvertiserDashboard() {
                         <h3 className="font-semibold text-foreground mb-2">{listing.title}</h3>
                         <div className="flex items-center text-muted-foreground mb-2">
                           <MapPin className="w-4 h-4 mr-1" />
-                          <span className="text-sm">{listing.location}</span>
+                          <span className="text-sm">{listing.city}</span>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 mb-4">
                           <div className="text-center p-2 bg-muted/30 rounded">
-                            <p className="text-lg font-bold text-foreground">{listing.views}</p>
+                            <p className="text-lg font-bold text-foreground">{listing.views || 0}</p>
                             <p className="text-xs text-muted-foreground">Views</p>
                           </div>
                           <div className="text-center p-2 bg-muted/30 rounded">
-                            <p className="text-lg font-bold text-foreground">{listing.requests}</p>
+                            <p className="text-lg font-bold text-foreground">{listing.requests || 0}</p>
                             <p className="text-xs text-muted-foreground">Requests</p>
                           </div>
                         </div>
 
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-lg font-bold text-primary">{listing.price} TND/month</span>
-                          {listing.rating > 0 && (
+                          {/* Assuming rating will come from analytics or a separate profile endpoint */}
                             <div className="flex items-center gap-1">
                               <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                              <span className="text-sm">{listing.rating}</span>
+                            <span className="text-sm">4.5</span>
                             </div>
-                          )}
                         </div>
 
-                        <p className="text-xs text-muted-foreground mb-3">Posted {listing.posted}</p>
+                        <p className="text-xs text-muted-foreground mb-3">Posted {new Date(listing.created_at).toLocaleDateString()}</p>
 
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" className="flex-1 bg-transparent">
                             <Eye className="w-4 h-4 mr-2" />
                             View
                           </Button>
-                          <Button variant="outline" size="sm" className="flex-1 bg-transparent">
+                          <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => handleEditListing(listing)}>
                             <Edit3 className="w-4 h-4 mr-2" />
                             Edit
                           </Button>
-                          <Button variant="outline" size="sm">
+                          <Button variant="outline" size="sm" className="text-red-600 bg-transparent" onClick={() => handleListingDelete(listing.id)}>
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
@@ -467,28 +851,26 @@ export default function AdvertiserDashboard() {
                 </div>
 
                 <div className="space-y-4">
-                  {requests.map((request) => (
+                  {loading && <p>Loading requests...</p>}
+                  {!loading && requests.map((request) => (
                     <Card key={request.id}>
                       <CardContent className="p-6">
                         <div className="flex items-start gap-4">
                           <Avatar className="w-12 h-12">
-                            <AvatarImage src={request.studentAvatar || "/placeholder.svg"} />
+                            <AvatarImage src={request.student_avatar_url || "/placeholder.svg"} />
                             <AvatarFallback>
-                              {request.studentName
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")}
+                              {request.student_first_name?.[0]}{request.student_last_name?.[0]}
                             </AvatarFallback>
                           </Avatar>
 
                           <div className="flex-1">
                             <div className="flex items-start justify-between mb-2">
                               <div>
-                                <h3 className="font-semibold text-foreground">{request.studentName}</h3>
-                                <p className="text-sm text-muted-foreground">
+                                <h3 className="font-semibold text-foreground">{request.student_first_name} {request.student_last_name}</h3>
+                                {/* <p className="text-sm text-muted-foreground">
                                   {request.field} at {request.university}
-                                </p>
-                                <p className="text-xs text-muted-foreground">Budget: {request.budget} TND/month</p>
+                                </p> */}
+                                {/* <p className="text-xs text-muted-foreground">Budget: {request.budget} TND/month</p> */}
                               </div>
                               <Badge className={`${getStatusColor(request.status)} flex items-center gap-1`}>
                                 {getStatusIcon(request.status)}
@@ -497,8 +879,8 @@ export default function AdvertiserDashboard() {
                             </div>
 
                             <div className="mb-3">
-                              <p className="text-sm font-medium text-foreground mb-1">For: {request.listingTitle}</p>
-                              <p className="text-xs text-muted-foreground">Sent {request.sentDate}</p>
+                              <p className="text-sm font-medium text-foreground mb-1">For: {request.listing_title}</p>
+                              <p className="text-xs text-muted-foreground">Sent {new Date(request.created_at).toLocaleDateString()}</p>
                             </div>
 
                             <div className="bg-muted/30 rounded-lg p-4 mb-4">
@@ -510,17 +892,17 @@ export default function AdvertiserDashboard() {
                             <div className="flex gap-2">
                               {request.status === "pending" && (
                                 <>
-                                  <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                                  <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAcceptRequest(request.id)}>
                                     <CheckCircle className="w-4 h-4 mr-2" />
                                     Accept
                                   </Button>
-                                  <Button variant="outline" size="sm">
+                                  <Button size="sm" className="text-red-600 bg-transparent" onClick={() => handleDeclineRequest(request.id)}>
                                     <XCircle className="w-4 h-4 mr-2" />
                                     Decline
                                   </Button>
                                 </>
                               )}
-                              <Button variant="outline" size="sm">
+                              <Button variant="outline" size="sm" onClick={() => handleMessageStudent(request.student_id, request.listing_id)}>
                                 <MessageCircle className="w-4 h-4 mr-2" />
                                 Message
                               </Button>
@@ -554,7 +936,7 @@ export default function AdvertiserDashboard() {
                             <div>
                               <p className="font-medium text-foreground text-sm">{listing.title}</p>
                               <p className="text-xs text-muted-foreground">
-                                {listing.views} views • {listing.requests} requests
+                                {listing.views || 0} views • {listing.requests || 0} requests
                               </p>
                             </div>
                             <Badge className={getStatusColor(listing.status)}>{listing.status}</Badge>
@@ -572,19 +954,19 @@ export default function AdvertiserDashboard() {
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Total Views</span>
-                          <span className="font-medium">{analytics.totalViews}</span>
+                          <span className="font-medium">{analytics?.totalViews || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Total Requests</span>
-                          <span className="font-medium">{analytics.totalRequests}</span>
+                          <span className="font-medium">{analytics?.totalRequests || 0}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Response Rate</span>
-                          <span className="font-medium">{analytics.responseRate}%</span>
+                          <span className="font-medium">{analytics?.responseRate || 0}%</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Average Rating</span>
-                          <span className="font-medium">{analytics.averageRating}/5</span>
+                          <span className="font-medium">{analytics?.averageRating || 0}/5</span>
                         </div>
                       </div>
                     </CardContent>
@@ -606,18 +988,15 @@ export default function AdvertiserDashboard() {
                     <CardContent className="space-y-4">
                       <div className="flex items-center gap-4 mb-6">
                         <Avatar className="w-20 h-20">
-                          <AvatarImage src={advertiser.avatar || "/placeholder.svg"} />
+                          <AvatarImage src={advertiserProfile?.avatar_url || "/placeholder.svg"} />
                           <AvatarFallback>
-                            {advertiser.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
+                            {advertiserProfile?.first_name?.[0]}{advertiserProfile?.last_name?.[0]}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <h3 className="font-semibold text-foreground">{advertiser.name}</h3>
-                          <p className="text-sm text-muted-foreground">Member since {advertiser.joinedDate}</p>
-                          {advertiser.verified && (
+                          <h3 className="font-semibold text-foreground">{advertiserProfile?.first_name} {advertiserProfile?.last_name}</h3>
+                          <p className="text-sm text-muted-foreground">Member since {new Date(advertiserProfile?.created_at || "").toLocaleDateString()}</p>
+                          {advertiserProfile?.status === 'active' && (
                             <Badge variant="secondary" className="mt-1">
                               <CheckCircle className="w-3 h-3 mr-1" />
                               Verified
@@ -629,25 +1008,25 @@ export default function AdvertiserDashboard() {
                       <div className="space-y-4">
                         <div>
                           <Label htmlFor="name">Full Name</Label>
-                          <Input id="name" value={advertiser.name} />
+                          <Input id="name" value={`${advertiserProfile?.first_name || ""} ${advertiserProfile?.last_name || ""}`} readOnly />
                         </div>
                         <div>
                           <Label htmlFor="email">Email</Label>
-                          <Input id="email" value={advertiser.email} />
+                          <Input id="email" value={advertiserProfile?.email || ""} readOnly />
                         </div>
                         <div>
                           <Label htmlFor="phone">Phone Number</Label>
-                          <Input id="phone" value={advertiser.phone} />
+                          <Input id="phone" value={advertiserProfile?.phone || ""} />
                         </div>
                         <div>
                           <Label htmlFor="location">Location</Label>
-                          <Input id="location" value={advertiser.location} />
+                          <Input id="location" value={advertiserProfile?.location || ""} />
                         </div>
                         <div>
                           <Label htmlFor="accountType">Account Type</Label>
                           <Select>
                             <SelectTrigger>
-                              <SelectValue placeholder={advertiser.accountType} />
+                              <SelectValue placeholder={advertiserProfile?.user_type || ""} />
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="student-owner">Student (Room Owner)</SelectItem>
@@ -712,19 +1091,39 @@ export default function AdvertiserDashboard() {
               <CardTitle>Add New Listing</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <form onSubmit={handleAddListing}>
               <div>
                 <Label htmlFor="title">Listing Title</Label>
-                <Input id="title" placeholder="e.g., Modern Apartment in Tunis Center" />
+                  <Input
+                    id="title"
+                    placeholder="e.g., Modern Apartment in Tunis Center"
+                    value={newListingForm.title}
+                    onChange={(e) => setNewListingForm({ ...newListingForm, title: e.target.value })}
+                    required
+                  />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="price">Monthly Rent (TND)</Label>
-                  <Input id="price" type="number" placeholder="350" />
+                    <Input
+                      id="price"
+                      type="number"
+                      placeholder="350"
+                      value={newListingForm.price}
+                      onChange={(e) => setNewListingForm({ ...newListingForm, price: e.target.value })}
+                      required
+                    />
                 </div>
                 <div>
                   <Label htmlFor="roommates">Number of Roommates</Label>
-                  <Select>
+                    <Select
+                      value={newListingForm.number_of_roommates}
+                      onValueChange={(value) =>
+                        setNewListingForm({ ...newListingForm, number_of_roommates: value })
+                      }
+                      required
+                    >
                     <SelectTrigger>
                       <SelectValue placeholder="Select" />
                     </SelectTrigger>
@@ -740,7 +1139,22 @@ export default function AdvertiserDashboard() {
 
               <div>
                 <Label htmlFor="location">Location</Label>
-                <Input id="location" placeholder="e.g., Tunis, Bab Bhar" />
+                  <Select
+                    value={newListingForm.city}
+                    onValueChange={(value) => setNewListingForm({ ...newListingForm, city: value })}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select city" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tunis">Tunis</SelectItem>
+                      <SelectItem value="sfax">Sfax</SelectItem>
+                      <SelectItem value="sousse">Sousse</SelectItem>
+                      <SelectItem value="monastir">Monastir</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
               </div>
 
               <div>
@@ -749,23 +1163,157 @@ export default function AdvertiserDashboard() {
                   id="description"
                   placeholder="Describe your room/apartment, amenities, rules, etc."
                   rows={4}
+                    value={newListingForm.description}
+                    onChange={(e) => setNewListingForm({ ...newListingForm, description: e.target.value })}
+                    required
                 />
               </div>
 
               <div>
                 <Label>Photos</Label>
-                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  <p className="text-sm text-muted-foreground">Click to upload photos or drag and drop</p>
+                <div
+                  className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-muted/30 transition-colors"
+                  onClick={() => document.getElementById("imageUpload")?.click()}
+                >
+                  <input
+                    id="imageUpload"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageChange}
+                  />
+                  {imagePreview ? (
+                    <img src={imagePreview} alt="Image Preview" className="max-h-40 mx-auto mb-2 object-contain" />
+                  ) : (
+                    <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {imagePreview ? "Click to change photo" : "Click to upload photos or drag and drop"}
+                  </p>
                 </div>
               </div>
 
               <div className="flex gap-2 pt-4">
-                <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setShowAddListing(false)}>
+                  <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setShowAddListing(false)} type="button">
                   Cancel
                 </Button>
-                <Button className="flex-1 bg-primary hover:bg-primary/90">Create Listing</Button>
+                  <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90" disabled={loading}>
+                    {loading ? "Creating..." : "Create Listing"}
+                  </Button>
               </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit Listing Modal */}
+      {showEditListing && editingListing && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <CardTitle>Edit Listing</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={handleListingUpdate}>
+                <div>
+                  <Label htmlFor="editTitle">Listing Title</Label>
+                  <Input
+                    id="editTitle"
+                    placeholder="e.g., Modern Apartment in Tunis Center"
+                    defaultValue={editingListing.title}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="editPrice">Monthly Rent (TND)</Label>
+                    <Input
+                      id="editPrice"
+                      type="number"
+                      placeholder="350"
+                      defaultValue={editingListing.price}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="editRoommates">Number of Roommates</Label>
+                    <Select
+                      defaultValue={String(editingListing.number_of_roommates)}
+                      onValueChange={(value) => {
+                        if (editingListing) {
+                          setEditingListing({ ...editingListing, number_of_roommates: parseInt(value) });
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="editRoommates">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1</SelectItem>
+                        <SelectItem value="2">2</SelectItem>
+                        <SelectItem value="3">3</SelectItem>
+                        <SelectItem value="4">4+</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="editLocation">Location</Label>
+                  <Select
+                    defaultValue={editingListing.city}
+                    onValueChange={(value) => {
+                      if (editingListing) {
+                        setEditingListing({ ...editingListing, city: value });
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="editLocation">
+                      <SelectValue placeholder="Select city" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tunis">Tunis</SelectItem>
+                      <SelectItem value="sfax">Sfax</SelectItem>
+                      <SelectItem value="sousse">Sousse</SelectItem>
+                      <SelectItem value="monastir">Monastir</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="editDescription">Description</Label>
+                  <Textarea
+                    id="editDescription"
+                    placeholder="Describe your room/apartment, amenities, rules, etc."
+                    rows={4}
+                    defaultValue={editingListing.description}
+                  />
+                </div>
+
+                <div>
+                  <Label>Photos</Label>
+                  {/* Display existing images and allow new uploads */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {editingListing.images && getListingImagesArray(editingListing.images).map((image: string, index: number) => (
+                      <img key={index} src={image} alt="Listing Image" className="w-24 h-24 object-cover rounded" />
+                    ))}
+                  </div>
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Click to upload new photos or drag and drop</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                  <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setShowEditListing(false)} type="button">
+                  Cancel
+                </Button>
+                  <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90" disabled={loading}>
+                    {loading ? "Saving..." : "Save Changes"}
+                  </Button>
+              </div>
+              </form>
             </CardContent>
           </Card>
         </div>

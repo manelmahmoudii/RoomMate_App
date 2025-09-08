@@ -91,6 +91,11 @@ export async function middleware(request: NextRequest) {
   
   // API route protection based on role
   if (pathname.startsWith("/api/")) {
+    // Allow all users to GET /api/listings for browsing
+    if (pathname.startsWith("/api/listings") && request.method === "GET") {
+      return NextResponse.next();
+    }
+
     if (!decodedToken) {
       console.log("Access to API without token. Redirecting to login.");
       return NextResponse.json({ message: "Authentication required" }, { status: 401 });

@@ -327,6 +327,24 @@ export default function AdminDashboard() {
     }
   }
 
+  const getListingImageUrl = (imagesString: string) => {
+    // If it's already a direct URL, return it.
+    if (typeof imagesString === 'string' && imagesString.startsWith('/')) {
+      return imagesString;
+    }
+
+    try {
+      // Attempt to parse as JSON array
+      const images = JSON.parse(imagesString);
+      if (Array.isArray(images) && images.length > 0) {
+        return images[0];
+      }
+    } catch (error) {
+      console.error("Error parsing images JSON or invalid image string for listing:", imagesString, error);
+    }
+    return "/placeholder.svg"; // Fallback image
+  };
+
   const handleUserAction = async (userId: string, action: 'suspend' | 'activate' | 'delete') => {
     if (action === 'delete') {
       if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
@@ -582,12 +600,12 @@ export default function AdminDashboard() {
                         {loading && <p>Loading recent activity...</p>}
                         {!loading && users.slice(0, 3).map((user, index) => (
                           <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                            <UserCheck className="w-5 h-5 text-green-500" />
-                            <div>
+                          <UserCheck className="w-5 h-5 text-green-500" />
+                          <div>
                               <p className="text-sm text-foreground">New {user.user_type} registered: {user.first_name} {user.last_name}</p>
                               <p className="text-xs text-muted-foreground">{new Date(user.created_at).toLocaleDateString()}</p>
-                            </div>
                           </div>
+                        </div>
                         ))}
                       </div>
                     </CardContent>
@@ -646,7 +664,7 @@ export default function AdminDashboard() {
                     </div>
                     <Select value={userTypeFilter} onValueChange={setUserTypeFilter}>
                       <SelectTrigger className="w-40">
-                        <Filter className="w-4 h-4 mr-2" />
+                      <Filter className="w-4 h-4 mr-2" />
                         <SelectValue placeholder="Filter by type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -761,7 +779,7 @@ export default function AdminDashboard() {
                       <CardContent className="p-6">
                         <div className="flex gap-4">
                           <img
-                            src={(listing.images && JSON.parse(listing.images)[0]) || "/placeholder.svg"}
+                            src={getListingImageUrl(listing.images)}
                             alt={listing.title}
                             className="w-32 h-24 object-cover rounded-lg"
                           />
@@ -785,18 +803,18 @@ export default function AdminDashboard() {
                               {listing.status === 'pending' && (
                                 <>
                                   <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleListingAction(listing.id, 'approve')}>
-                                    <CheckCircle className="w-4 h-4 mr-2" />
-                                    Approve
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-red-600 border-red-200 bg-transparent"
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Approve
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-red-600 border-red-200 bg-transparent"
                                     onClick={() => handleListingAction(listing.id, 'reject')}
-                                  >
-                                    <XCircle className="w-4 h-4 mr-2" />
-                                    Reject
-                                  </Button>
+                              >
+                                <XCircle className="w-4 h-4 mr-2" />
+                                Reject
+                              </Button>
                                 </>                                
                               )}
                               <Button variant="outline" size="sm">
@@ -1075,17 +1093,17 @@ export default function AdminDashboard() {
                           "System errors and alerts",
                           "Weekly analytics reports",
                         ].map((notification, index) => (
-                            <div key={index} className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id={`notif-${index}`}
-                                defaultChecked={index < 4}
-                                className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
-                              />
-                              <Label htmlFor={`notif-${index}`} className="text-sm">
-                                {notification}
-                              </Label>
-                            </div>
+                          <div key={index} className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              id={`notif-${index}`}
+                              defaultChecked={index < 4}
+                              className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                            />
+                            <Label htmlFor={`notif-${index}`} className="text-sm">
+                              {notification}
+                            </Label>
+                          </div>
                         ))}
                       </div>
                     </CardContent>

@@ -34,6 +34,7 @@ export async function initDB() {
       university VARCHAR(255),
       study_level VARCHAR(50),
       preferences JSON,
+      account_type VARCHAR(50),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
@@ -51,7 +52,7 @@ export async function initDB() {
       latitude DECIMAL(10,8),
       longitude DECIMAL(11,8),
       room_type VARCHAR(50),
-      max_roommates INT DEFAULT 1,
+      number_of_roommates INT DEFAULT 1,
       current_roommates INT DEFAULT 0,
       amenities JSON,
       images JSON,
