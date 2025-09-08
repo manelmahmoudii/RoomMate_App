@@ -4,9 +4,10 @@ import { v4 as uuidv4 } from "uuid";
 import { getConnection, initDB } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
+  let connection;
   try {
     await initDB();
-    const connection = await getConnection();
+    connection = await getConnection();
 
     const body = await req.json();
     const { 
@@ -56,11 +57,13 @@ export async function POST(req: NextRequest) {
       ]
     );
 
-    await connection.end();
-
     return NextResponse.json({ message: "User registered successfully" });
   } catch (error) {
     console.error("Signup error:", error);
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

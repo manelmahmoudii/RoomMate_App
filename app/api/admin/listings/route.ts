@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getConnection } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
+  let connection;
   try {
-    const connection = await getConnection();
+    connection = await getConnection();
     const searchParams = request.nextUrl.searchParams;
     const status = searchParams.get("status");
 
@@ -24,10 +25,13 @@ export async function GET(request: NextRequest) {
     }
 
     const [rows] = await connection.execute(query, params);
-    await connection.end();
     return NextResponse.json(rows);
   } catch (error) {
     console.error("Error fetching listings:", error);
     return NextResponse.json({ error: "Failed to fetch listings" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

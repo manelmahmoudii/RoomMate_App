@@ -7,6 +7,27 @@ const DB_USER = process.env.DB_USER || "root";
 const DB_PASSWORD = process.env.DB_PASSWORD || "";
 const DB_NAME = process.env.DB_NAME || "colocation_db";
 
+let pool: mysql.Pool | null = null;
+
+async function initializePool() {
+  pool = mysql.createPool({
+    host: DB_HOST,
+    user: DB_USER,
+    password: DB_PASSWORD,
+    database: DB_NAME,
+    waitForConnections: true,
+    connectionLimit: 10, // Adjust as needed
+    queueLimit: 0,
+  });
+}
+
+export async function getConnection() {
+  if (!pool) {
+    await initializePool();
+  }
+  return await pool!.getConnection();
+}
+
 export async function initDB() {
   const connection = await mysql.createConnection({
     host: DB_HOST,
@@ -156,13 +177,4 @@ export async function initDB() {
   }
 
   await connection.end();
-}
-
-export async function getConnection() {
-  return await mysql.createConnection({
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PASSWORD,
-    database: DB_NAME,
-  });
 }

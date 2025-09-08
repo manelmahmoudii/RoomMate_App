@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 const SECRET_KEY = process.env.JWT_SECRET || "fallback_secret_key";
 
 export async function POST(request: NextRequest) {
+  let connection;
   try {
     const token = request.cookies.get("token")?.value;
 
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing listing ID" }, { status: 400 });
     }
 
-    const connection = await getConnection();
+    connection = await getConnection();
 
     // Check if the listing is already favorited by the student
     const [existingFavorite] = await connection.query(
@@ -45,7 +46,6 @@ export async function POST(request: NextRequest) {
         decodedToken.id,
         listingId,
       ]);
-      await connection.end();
       return NextResponse.json({ message: "Listing unfavorited successfully", favorited: false });
     } else {
       // If not favorited, add it
@@ -55,11 +55,14 @@ export async function POST(request: NextRequest) {
         decodedToken.id,
         listingId,
       ]);
-      await connection.end();
       return NextResponse.json({ message: "Listing favorited successfully", favorited: true });
     }
   } catch (error) {
     console.error("Error toggling favorite listing:", error);
     return NextResponse.json({ error: "Failed to toggle favorite listing" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 const SECRET_KEY = process.env.JWT_SECRET || "fallback_secret_key";
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+  let connection;
   try {
     const { id } = params; // This is the roommate_request ID
 
@@ -30,7 +31,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const connection = await getConnection();
+    connection = await getConnection();
 
     // Verify that the logged-in user (advertiser) is the owner of the listing associated with this request
     const [requestRows] = await connection.query(
@@ -40,12 +41,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const requestDetails = (requestRows as any[])[0];
 
     if (!requestDetails) {
-      await connection.end();
       return NextResponse.json({ error: "Roommate request not found" }, { status: 404 });
     }
 
     if (requestDetails.owner_id !== decodedToken.id) {
-      await connection.end();
       return NextResponse.json({ error: "Unauthorized to manage this request" }, { status: 403 });
     }
 
@@ -53,16 +52,18 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const { status } = body; // Expected status: 'accepted' or 'rejected'
 
     if (!status || !["accepted", "rejected"].includes(status)) {
-      await connection.end();
       return NextResponse.json({ error: "Invalid status provided" }, { status: 400 });
     }
 
     await connection.query("UPDATE roommate_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [status, id]);
-    await connection.end();
 
     return NextResponse.json({ message: `Request ${status} successfully` });
   } catch (error) {
     console.error("Error updating roommate request:", error);
     return NextResponse.json({ error: "Failed to update request" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

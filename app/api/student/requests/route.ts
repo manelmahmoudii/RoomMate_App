@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 const SECRET_KEY = process.env.JWT_SECRET || "fallback_secret_key";
 
 export async function GET(request: NextRequest) {
+  let connection;
   try {
     const token = request.cookies.get("token")?.value;
 
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const connection = await getConnection();
+    connection = await getConnection();
     const [rows] = await connection.query(
       `SELECT
         rr.id AS request_id,
@@ -43,16 +44,20 @@ export async function GET(request: NextRequest) {
       WHERE rr.student_id = ?`,
       [decodedToken.id]
     );
-    await connection.end();
 
     return NextResponse.json(rows);
   } catch (error) {
     console.error("Error fetching student requests:", error);
     return NextResponse.json({ error: "Failed to fetch requests" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }
 
 export async function POST(request: NextRequest) {
+  let connection;
   try {
     const token = request.cookies.get("token")?.value;
 
@@ -78,7 +83,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing listing ID or message" }, { status: 400 });
     }
 
-    const connection = await getConnection();
+    connection = await getConnection();
 
     // Check if a request already exists for this listing from this student
     const [existingRequest] = await connection.query(
@@ -87,7 +92,6 @@ export async function POST(request: NextRequest) {
     );
 
     if ((existingRequest as any[]).length > 0) {
-      await connection.end();
       return NextResponse.json({ error: "You have already sent a request for this listing." }, { status: 409 });
     }
 
@@ -96,11 +100,14 @@ export async function POST(request: NextRequest) {
       "INSERT INTO roommate_requests (id, student_id, listing_id, message, status) VALUES (?, ?, ?, ?, ?)",
       [requestId, decodedToken.id, listingId, message, "pending"]
     );
-    await connection.end();
 
     return NextResponse.json({ message: "Roommate request sent successfully" }, { status: 201 });
   } catch (error) {
     console.error("Error sending roommate request:", error);
     return NextResponse.json({ error: "Failed to send roommate request" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

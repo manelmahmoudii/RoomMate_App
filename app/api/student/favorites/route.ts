@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 const SECRET_KEY = process.env.JWT_SECRET || "fallback_secret_key";
 
 export async function GET(request: NextRequest) {
+  let connection;
   try {
     const token = request.cookies.get("token")?.value;
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const connection = await getConnection();
+    connection = await getConnection();
     const [rows] = await connection.query(
       `SELECT
         f.id AS favorite_id,
@@ -42,11 +43,14 @@ export async function GET(request: NextRequest) {
       WHERE f.user_id = ?`,
       [decodedToken.id]
     );
-    await connection.end();
 
     return NextResponse.json(rows);
   } catch (error) {
     console.error("Error fetching student favorites:", error);
     return NextResponse.json({ error: "Failed to fetch favorites" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

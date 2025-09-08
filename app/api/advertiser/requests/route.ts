@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 const SECRET_KEY = process.env.JWT_SECRET || "fallback_secret_key";
 
 export async function GET(request: NextRequest) {
+  let connection;
   try {
     const token = request.cookies.get("token")?.value;
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const connection = await getConnection();
+    connection = await getConnection();
     const [rows] = await connection.query(
       `SELECT 
         rr.id, rr.student_id, rr.listing_id, rr.message, rr.status, rr.created_at,
@@ -36,11 +37,14 @@ export async function GET(request: NextRequest) {
       WHERE l.owner_id = ?`,
       [decodedToken.id]
     );
-    await connection.end();
 
     return NextResponse.json(rows);
   } catch (error) {
     console.error("Error fetching advertiser requests:", error);
     return NextResponse.json({ error: "Failed to fetch requests" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

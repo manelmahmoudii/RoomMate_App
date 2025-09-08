@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 const SECRET_KEY = process.env.JWT_SECRET || "fallback_secret_key";
 
 export async function GET(request: NextRequest) {
+  let connection;
   try {
     const token = request.cookies.get("token")?.value;
 
@@ -24,11 +25,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    const connection = await getConnection();
+    connection = await getConnection();
 
     // Fetch total views for advertiser's listings
     const [totalViewsRows] = await connection.query(
-      "SELECT SUM(views) as totalViews FROM listings WHERE owner_id = ?",
+      "SELECT SUM(views_count) as totalViews FROM listings WHERE owner_id = ?", // Changed 'views' to 'views_count'
       [decodedToken.id]
     );
     const totalViews = (totalViewsRows as any[])[0].totalViews || 0;
@@ -52,8 +53,6 @@ export async function GET(request: NextRequest) {
     const monthlyEarnings = 0; // Placeholder
     const responseRate = 95; // Placeholder
 
-    await connection.end();
-
     return NextResponse.json({
       totalViews,
       totalRequests,
@@ -65,5 +64,9 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error fetching advertiser analytics:", error);
     return NextResponse.json({ error: "Failed to fetch analytics" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

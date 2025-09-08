@@ -23,21 +23,120 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-// Removed: import Header from "../../header/page"; // Import the Header component
+
+interface ListingDetail {
+  id: string;
+  owner_id: string;
+  title: string;
+  description: string;
+  price: number;
+  city: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  room_type: string;
+  number_of_roommates: number;
+  current_roommates: number;
+  amenities: string; // JSON string
+  images: string; // JSON string
+  available_from: string;
+  status: string;
+  views_count: number;
+  created_at: string;
+  owner_first_name: string;
+  owner_last_name: string;
+  owner_email: string;
+  owner_phone: string;
+  owner_avatar_url: string;
+  owner_bio: string;
+  owner_created_at: string;
+}
+
+interface Comment {
+  id: string;
+  content: string;
+  created_at: string;
+  profiles: {
+    user_id: string;
+    full_name: string;
+    avatar_url: string;
+  };
+}
+
+interface UserSession {
+  id: string;
+  email: string;
+  role: string; // This will come from the decoded token directly or mapped from user_type
+  first_name: string;
+  last_name: string;
+  avatar_url: string;
+  user_type: string; // Add user_type to match API response more closely
+  // Add other user properties if needed
+}
 
 export default function ListingDetailPage({ params }: { params: { id: string } }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [showContactForm, setShowContactForm] = useState(false)
-  const [listing, setListing] = useState<any>(null)
-  const [comments, setComments] = useState<any[]>([])
+  const [listing, setListing] = useState<ListingDetail | null>(null)
+  const [comments, setComments] = useState<Comment[]>([])
   const [newComment, setNewComment] = useState("")
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<UserSession | null>(null)
   const [isFavorited, setIsFavorited] = useState(false)
   const [message, setMessage] = useState("")
 
   const router = useRouter()
   const { id } = params; // Get listing ID from params
+
+  const getParsedImages = (imagesInput: string | string[] | null) => {
+    if (!imagesInput) return [];
+
+    // If it's already an array, return it directly
+    if (Array.isArray(imagesInput)) {
+      return imagesInput;
+    }
+
+    // Convert to string defensively before any string operations
+    const imagesString = String(imagesInput);
+
+    // If it's already a direct URL, return it as a single-item array.
+    if (imagesString.startsWith('/') || imagesString.startsWith('http')) {
+      return [imagesString];
+    }
+
+    try {
+      const images = JSON.parse(imagesString);
+      return Array.isArray(images) ? images : [];
+    } catch (e) {
+      console.error("Error parsing images JSON string:", imagesString, e);
+      return [];
+    }
+  };
+
+  const getParsedAmenities = (amenitiesInput: string | string[] | null) => {
+    if (!amenitiesInput) return [];
+
+    // If it's already an array, return it directly
+    if (Array.isArray(amenitiesInput)) {
+      return amenitiesInput;
+    }
+
+    // Convert to string defensively before any string operations
+    const amenitiesString = String(amenitiesInput);
+
+    if (typeof amenitiesString === 'string') {
+      try {
+        const amenities = JSON.parse(amenitiesString);
+        return Array.isArray(amenities) ? amenities : [];
+      } catch (e) {
+        console.error("Error parsing amenities JSON string:", amenitiesString, e);
+        return [];
+      }
+    }
+
+    console.error("Unexpected type for amenitiesInput after string conversion:", typeof amenitiesInput, amenitiesInput);
+    return [];
+  };
 
   const fetchListing = async () => {
     setLoading(true);
@@ -61,11 +160,16 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   };
   const fetchUserSession = async () => {
     try {
-      const response = await fetch("/api/auth/session"); // Assuming an API route to get user session
+      const response = await fetch("/api/auth/session", {
+        credentials: "include", // Include cookies with the request
+      });
       if (response.ok) {
         const data = await response.json();
-        setUser(data.user);
+        console.log("User session fetched successfully:", data);
+        // Map user_type from API to role for consistency in UserSession interface
+        setUser({ ...data, role: data.user_type });
       } else {
+        console.error("Failed to fetch user session, status:", response.status);
         setUser(null);
       }
     } catch (error) {
@@ -87,19 +191,24 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
 
     try {
       const method = isFavorited ? "DELETE" : "POST";
-      const response = await fetch(`/api/favorites`, {
-        method,
+      const response = await fetch("/api/student/favorites/toggle", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ listingId: id }),
+        credentials: "include", // Include cookies with the request
       });
 
       if (response.ok) {
         setIsFavorited(!isFavorited);
+        // Optionally, refetch listings or update UI to reflect new favorite status in saved listings
       } else {
         console.error("Failed to toggle favorite");
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to toggle favorite.");
       }
     } catch (error) {
       console.error("Error toggling favorite:", error);
+      alert("An error occurred while toggling favorite.");
     }
   };
 
@@ -115,16 +224,20 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: newComment, userId: user.id }),
+        credentials: "include", // Include cookies with the request
       });
 
       if (response.ok) {
         setNewComment("");
         fetchListing(); // Re-fetch listing to get new comments
       } else {
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to post comment.");
         console.error("Failed to post comment");
       }
     } catch (error) {
       console.error("Error posting comment:", error);
+      alert("An error occurred while posting the comment.");
     }
   };
 
@@ -134,6 +247,15 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       return;
     }
     if (!message.trim()) return;
+    if (!listing?.owner_id) {
+      alert("Listing owner information is missing.");
+      return;
+    }
+
+    console.log("Attempting to send message...");
+    console.log("Current user:", user);
+    console.log("Listing owner ID:", listing.owner_id);
+    console.log("Message content:", message);
 
     try {
       const response = await fetch("/api/messages", {
@@ -141,9 +263,10 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           recipientId: listing.owner_id,
-          senderId: user.id,
-          content: message,
+          message: message,
+          listingId: id, // Pass listing ID for context
         }),
+        credentials: "include", // Include cookies with the request
       });
 
       if (response.ok) {
@@ -151,10 +274,13 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
         setShowContactForm(false);
         alert("Message sent successfully!");
       } else {
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to send message!");
         console.error("Failed to send message");
       }
     } catch (error) {
       console.error("Error sending message:", error);
+      alert("An error occurred while sending the message.");
     }
   };
   
@@ -185,6 +311,9 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
     )
   }
 
+  const displayedImages = getParsedImages(listing.images);
+  const displayedAmenities = getParsedAmenities(listing.amenities);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Removed Header component */}
@@ -210,10 +339,8 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
               <div className="relative">
                 <img
                   src={
-                    listing.images?.[currentImageIndex] ||
-                    "/placeholder.svg?height=400&width=800&query=modern apartment room" ||
-                    "/placeholder.svg" ||
-                    "/placeholder.svg"
+                    displayedImages[currentImageIndex] ||
+                    "/placeholder.svg?height=400&width=800&query=modern apartment room"
                   }
                   alt={listing.title}
                   className="w-full h-96 object-cover"
@@ -234,10 +361,10 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
               </div>
 
               {/* Image Thumbnails */}
-              {listing.images && listing.images.length > 1 && (
+              {displayedImages.length > 1 && (
                 <div className="p-4">
                   <div className="flex gap-2 overflow-x-auto">
-                    {listing.images.map((image: string, index: number) => (
+                    {displayedImages.map((image: string, index: number) => (
                       <button
                         key={index}
                         onClick={() => setCurrentImageIndex(index)}
@@ -272,7 +399,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                     <div className="flex items-center gap-4">
                       <div className="flex items-center text-muted-foreground">
                         <Users className="w-5 h-5 mr-1" />
-                        <span>{listing.max_roommates} max roommates</span>
+                        <span>{listing.number_of_roommates} max roommates</span>
                       </div>
                       <div className="flex items-center text-muted-foreground">
                         <Home className="w-5 h-5 mr-1" />
@@ -295,14 +422,14 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
             </Card>
 
             {/* Amenities */}
-            {listing.amenities && listing.amenities.length > 0 && (
+            {displayedAmenities.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-xl">Amenities & Features</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {listing.amenities.map((amenity: string, index: number) => (
+                    {displayedAmenities.map((amenity: string, index: number) => (
                       <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
                         <CheckCircle className="w-5 h-5 text-primary" />
                         <span className="text-foreground">{amenity}</span>
@@ -376,40 +503,38 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">
                   <Avatar className="w-16 h-16">
-                    <AvatarImage src={listing.profiles?.avatar_url || "/placeholder.svg"} />
+                    <AvatarImage src={listing.owner_avatar_url || "/placeholder.svg"} />
                     <AvatarFallback>
-                      {listing.profiles?.full_name
-                        ?.split(" ")
-                        .map((n: string) => n[0])
-                        .join("") || "U"}
+                      {listing.owner_first_name?.[0]}{listing.owner_last_name?.[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-foreground">{listing.profiles?.full_name}</h3>
+                      <h3 className="font-semibold text-foreground">{listing.owner_first_name} {listing.owner_last_name}</h3>
                       <Shield className="w-4 h-4 text-green-500" />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Member since {new Date(listing.profiles?.created_at).getFullYear()}
+                      Member since {new Date(listing.owner_created_at).getFullYear()}
                     </p>
                   </div>
                 </div>
 
-                {listing.profiles?.bio && <p className="text-sm text-muted-foreground mb-4">{listing.profiles.bio}</p>}
+                {listing.owner_bio && <p className="text-sm text-muted-foreground mb-4">{listing.owner_bio}</p>}
 
                 <div className="space-y-3">
+                  {user && user.id !== listing.owner_id && (
                   <Button
                     className="w-full bg-primary hover:bg-primary/90"
                     onClick={() => setShowContactForm(!showContactForm)}
-                    disabled={!user}
                   >
                     <MessageCircle className="w-4 h-4 mr-2" />
                     Send Message
                   </Button>
-                  {listing.profiles?.phone && (
+                  )}
+                  {listing.owner_phone && (
                     <Button variant="outline" className="w-full bg-transparent">
                       <Phone className="w-4 h-4 mr-2" />
-                      {listing.profiles.phone}
+                      {listing.owner_phone}
                     </Button>
                   )}
                 </div>
@@ -417,7 +542,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
             </Card>
 
             {/* Contact Form */}
-            {showContactForm && user && (
+            {showContactForm && user && user.id !== listing.owner_id && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Send a Message</CardTitle>
@@ -432,7 +557,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                   />
                   <Button
                     className="w-full bg-primary hover:bg-primary/90"
-                    onClick={handleSendMessage} // Add onClick handler
+                    onClick={handleSendMessage}
                     disabled={!message.trim()}
                   >
                     <Mail className="w-4 h-4 mr-2" />

@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 const SECRET_KEY = process.env.JWT_SECRET || "fallback_secret_key";
 
 export async function POST(request: NextRequest) {
+  let connection;
   try {
     const token = request.cookies.get("token")?.value;
 
@@ -31,18 +32,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing recipient ID or message" }, { status: 400 });
     }
 
-    const connection = await getConnection();
+    connection = await getConnection();
     const messageId = uuidv4();
 
     await connection.query(
-      "INSERT INTO messages (id, sender_id, recipient_id, listing_id, message_content) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO messages (id, sender_id, recipient_id, listing_id, content) VALUES (?, ?, ?, ?, ?)", // Changed message_content to content
       [messageId, decodedToken.id, recipientId, listingId || null, message]
     );
-    await connection.end();
 
     return NextResponse.json({ message: "Message sent successfully" }, { status: 201 });
   } catch (error) {
     console.error("Error sending message:", error);
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }

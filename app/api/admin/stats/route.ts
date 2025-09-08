@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getConnection } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
+  let connection;
   try {
-    const connection = await getConnection();
+    connection = await getConnection();
 
     // Fetch total users
     const [totalUsersRows] = await connection.query("SELECT COUNT(*) as count FROM users");
@@ -30,8 +31,6 @@ export async function GET(request: NextRequest) {
     const [flaggedContentRows] = await connection.query("SELECT COUNT(*) as count FROM roommate_requests WHERE status = 'pending'");
     const flaggedContent = (flaggedContentRows as any[])[0].count;
 
-    await connection.end();
-
     return NextResponse.json({
       totalUsers,
       activeListings,
@@ -43,5 +42,9 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Error fetching stats:", error);
     return NextResponse.json({ error: "Failed to fetch statistics" }, { status: 500 });
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 }
