@@ -28,6 +28,7 @@ import {
   Filter,
 } from "lucide-react"
 import Link from "next/link"
+// Removed: import Header from "../../header/page"
 
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
@@ -152,43 +153,14 @@ export default function StudentDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">RoomMate TN</span>
-            </Link>
-
-            <div className="hidden md:flex items-center space-x-8">
-              <Link href="/search" className="text-muted-foreground hover:text-foreground transition-colors">
-                Search Rooms
-              </Link>
-              <Link href="/dashboard/student" className="text-primary font-medium">
-                Dashboard
-              </Link>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="icon">
-                <Bell className="w-5 h-5" />
-              </Button>
-              <Avatar className="w-8 h-8">
-                <AvatarImage src={user.avatar || "/placeholder.svg"} />
-                <AvatarFallback>
-                  {user.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* Removed Header component */}
+      {/*
+      <Header
+        title="RoomMate TN Student"
+        // navLinks={[]} // Header now manages its own navigation links
+        // authButtons={false} // Header now manages its own auth buttons
+      />
+      */}
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
@@ -575,9 +547,9 @@ export default function StudentDashboard() {
                               <SelectValue placeholder={user.university} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="university-tunis">University of Tunis</SelectItem>
-                              <SelectItem value="university-sfax">University of Sfax</SelectItem>
-                              <SelectItem value="university-sousse">University of Sousse</SelectItem>
+                                <SelectItem value="university-tunis">University of Tunis</SelectItem>
+                                <SelectItem value="university-sfax">University of Sfax</SelectItem>
+                                <SelectItem value="university-sousse">University of Sousse</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

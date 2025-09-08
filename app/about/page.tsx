@@ -3,58 +3,13 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Users, Shield, Heart, Star, CheckCircle, Clock, MapPin, Award, Target, Zap } from "lucide-react"
 import Link from "next/link"
+import Header from "../header/page"
 
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
-      <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 smooth-transition">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-2 animate-fade-in">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center animate-float">
-                <Users className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">RoomMate TN</span>
-            </div>
-
-            <div className="hidden md:flex items-center space-x-8 animate-fade-in">
-              <Link href="/" className="text-muted-foreground hover:text-foreground smooth-transition">
-                Home
-              </Link>
-              <Link href="/search" className="text-muted-foreground hover:text-foreground smooth-transition">
-                Search Rooms
-              </Link>
-              <Link
-                href="/dashboard/advertiser"
-                className="text-muted-foreground hover:text-foreground smooth-transition"
-              >
-                Post Room
-              </Link>
-              <Link href="/about" className="text-foreground font-medium">
-                About
-              </Link>
-            </div>
-
-            <div className="md:hidden">
-              <button className="p-2 rounded-lg hover:bg-muted smooth-transition">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="hidden md:flex items-center space-x-4 animate-fade-in">
-              <Button variant="ghost" size="sm" className="smooth-transition" asChild>
-                <Link href="/auth/login">Sign In</Link>
-              </Button>
-              <Button size="sm" className="bg-primary hover:bg-primary/90 smooth-transition hover-lift" asChild>
-                <Link href="/auth/signup">Get Started</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      
 
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-16 sm:py-24 lg:py-32">

@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+// Removed: import Header from "../../header/page"; // Import the Header component
 
 export default function ListingDetailPage({ params }: { params: { id: string } }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
@@ -36,20 +37,126 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   const [message, setMessage] = useState("")
 
   const router = useRouter()
+  const { id } = params; // Get listing ID from params
 
-  
+  const fetchListing = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/listings/${id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setListing(data.listing);
+        setComments(data.comments || []);
+        setIsFavorited(data.isFavorited);
+      } else {
+        console.error("Failed to fetch listing");
+        setListing(null);
+      }
+    } catch (error) {
+      console.error("Error fetching listing:", error);
+      setListing(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+  const fetchUserSession = async () => {
+    try {
+      const response = await fetch("/api/auth/session"); // Assuming an API route to get user session
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.user);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error("Error fetching user session:", error);
+      setUser(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchListing();
+    fetchUserSession();
+  }, [id]);
 
   const toggleFavorite = async () => {
     if (!user) {
-      router.push("/auth/login")
-      return
+      router.push("/auth/login");
+      return;
     }
 
-   
-  }
+    try {
+      const method = isFavorited ? "DELETE" : "POST";
+      const response = await fetch(`/api/favorites`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId: id }),
+      });
 
-  
+      if (response.ok) {
+        setIsFavorited(!isFavorited);
+      } else {
+        console.error("Failed to toggle favorite");
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+    }
+  };
 
+  const handlePostComment = async () => {
+    if (!user) {
+      router.push("/auth/login");
+      return;
+    }
+    if (!newComment.trim()) return;
+
+    try {
+      const response = await fetch(`/api/listings/${id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: newComment, userId: user.id }),
+      });
+
+      if (response.ok) {
+        setNewComment("");
+        fetchListing(); // Re-fetch listing to get new comments
+      } else {
+        console.error("Failed to post comment");
+      }
+    } catch (error) {
+      console.error("Error posting comment:", error);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!user) {
+      router.push("/auth/login");
+      return;
+    }
+    if (!message.trim()) return;
+
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientId: listing.owner_id,
+          senderId: user.id,
+          content: message,
+        }),
+      });
+
+      if (response.ok) {
+        setMessage("");
+        setShowContactForm(false);
+        alert("Message sent successfully!");
+      } else {
+        console.error("Failed to send message");
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
+  };
   
   if (loading) {
     return (
@@ -80,36 +187,10 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">RoomMate TN</span>
-            </Link>
-
-            <div className="flex items-center space-x-4">
-              {user ? (
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/dashboard/student">Dashboard</Link>
-                </Button>
-              ) : (
-                <>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href="/auth/login">Sign In</Link>
-                  </Button>
-                  <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
-                    <Link href="/auth/signup">Get Started</Link>
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* Removed Header component */}
+      {/*
+      <Header />
+      */}
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Back Button */}
@@ -247,7 +328,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                       rows={3}
                       className="resize-none"
                     />
-                    <Button  disabled={!newComment.trim()}>
+                    <Button onClick={handlePostComment} disabled={!newComment.trim()}>
                       <Send className="w-4 h-4 mr-2" />
                       Post Comment
                     </Button>
@@ -351,7 +432,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                   />
                   <Button
                     className="w-full bg-primary hover:bg-primary/90"
-                    
+                    onClick={handleSendMessage} // Add onClick handler
                     disabled={!message.trim()}
                   >
                     <Mail className="w-4 h-4 mr-2" />

@@ -1,4 +1,6 @@
 import mysql from "mysql2/promise";
+import bcrypt from "bcryptjs";
+import { v4 as uuidv4 } from "uuid";
 
 const DB_HOST = process.env.DB_HOST || "localhost";
 const DB_USER = process.env.DB_USER || "root";
@@ -26,6 +28,7 @@ export async function initDB() {
       password VARCHAR(255) NOT NULL,
       phone VARCHAR(50),
       user_type ENUM('student','advertiser','admin') NOT NULL DEFAULT 'student',
+      status ENUM('active','suspended') NOT NULL DEFAULT 'active',
       avatar_url VARCHAR(255),
       bio TEXT,
       university VARCHAR(255),
@@ -135,6 +138,21 @@ export async function initDB() {
       FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL
     )
   `);
+
+  // Create default admin user if not exists
+  const [adminRows] = await connection.query("SELECT id FROM users WHERE user_type = 'admin' AND email = 'admin@roommateTN.com'");
+  
+  if (Array.isArray(adminRows) && adminRows.length === 0) {
+    const adminId = uuidv4();
+    const hashedPassword = await bcrypt.hash("adminpassword", 10); // Hash a default admin password
+    await connection.query(
+      "INSERT INTO users (id, email, first_name, last_name, password, user_type) VALUES (?, ?, ?, ?, ?, ?)",
+      [adminId, "admin@roommateTN.com", "Admin", "User", hashedPassword, "admin"]
+    );
+    console.log("Default admin user created.");
+  } else {
+    console.log("Admin user already exists.");
+  }
 
   await connection.end();
 }

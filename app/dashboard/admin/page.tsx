@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,12 +30,69 @@ import {
   MessageSquare,
 } from "lucide-react"
 import Link from "next/link"
+// Removed: import Header from "../../header/page"
+
+interface User {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  user_type: string;
+  avatar_url: string;
+  created_at: string;
+  status: 'active' | 'suspended'; // Add status to User interface
+}
+
+interface Listing {
+  id: string;
+  title: string;
+  owner_id: string;
+  first_name: string;
+  last_name: string;
+  city: string;
+  price: number;
+  images: string;
+  status: string;
+  created_at: string;
+}
+
+interface Report {
+  id: string;
+  listing_id: string;
+  student_id: string;
+  message: string;
+  status: 'pending' | 'resolved' | 'rejected'; // Add status to Report interface
+  created_at: string;
+  student_first_name: string;
+  student_last_name: string;
+  listing_title: string;
+}
+
+interface Stats {
+  totalUsers: number;
+  activeListings: number;
+  pendingListings: number;
+  newUsersThisMonth: number;
+  averageRating: number;
+  flaggedContent: number;
+  responseRate?: number;
+}
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
   const [selectedTimeRange, setSelectedTimeRange] = useState("30d")
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [listings, setListings] = useState<Listing[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userTypeFilter, setUserTypeFilter] = useState("all");
+  const [userStatusFilter, setUserStatusFilter] = useState("all");
+  const [selectedListingStatusFilter, setSelectedListingStatusFilter] = useState("all");
+  const [selectedReportStatusFilter, setSelectedReportStatusFilter] = useState("all");
+  const [adminProfile, setAdminProfile] = useState<User | null>(null);
 
-  // Mock admin data
+  // Mock admin data - this part can remain mostly static unless you want to fetch admin profile.
   const admin = {
     name: "Admin User",
     email: "admin@roommateTN.com",
@@ -43,107 +100,202 @@ export default function AdminDashboard() {
     role: "Super Admin",
   }
 
+  const fetchStats = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/stats");
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const fetchUsers = useCallback(async (typeFilter = userTypeFilter, statusFilter = userStatusFilter) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (typeFilter !== "all") params.append("type", typeFilter);
+      if (statusFilter !== "all") params.append("status", statusFilter); // Not yet implemented in API
+
+      const response = await fetch(`/api/admin/users?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [userTypeFilter, userStatusFilter]);
+
+  const fetchListings = useCallback(async (statusFilter = selectedListingStatusFilter) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.append("status", statusFilter);
+
+      const response = await fetch(`/api/admin/listings?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setListings(data);
+      }
+    } catch (error) {
+      console.error("Error fetching listings:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedListingStatusFilter]);
+
+  const fetchReports = useCallback(async (statusFilter = selectedReportStatusFilter) => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.append("status", statusFilter);
+
+      const response = await fetch(`/api/admin/reports?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setReports(data);
+      }
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedReportStatusFilter]);
+
+  const fetchAdminProfile = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/auth/session");
+      if (response.ok) {
+        const data = await response.json();
+        setAdminProfile(data.user);
+      } else {
+        console.error("Failed to fetch admin profile:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching admin profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStats();
+    fetchUsers();
+    fetchListings();
+    fetchReports();
+    fetchAdminProfile();
+  }, [selectedTimeRange, userTypeFilter, userStatusFilter, selectedListingStatusFilter, selectedReportStatusFilter, fetchStats, fetchUsers, fetchListings, fetchReports, fetchAdminProfile]); // Refetch when filters change
+
   // Mock platform statistics
-  const stats = {
-    totalUsers: 1247,
-    activeListings: 89,
-    pendingListings: 12,
-    totalRevenue: 15420,
-    newUsersThisMonth: 156,
-    averageRating: 4.6,
-    responseRate: 94,
-    flaggedContent: 3,
-  }
+  // const stats = {
+  //   totalUsers: 1247,
+  //   activeListings: 89,
+  //   pendingListings: 12,
+  //   totalRevenue: 15420,
+  //   newUsersThisMonth: 156,
+  //   averageRating: 4.6,
+  //   responseRate: 94,
+  //   flaggedContent: 3,
+  // }
 
   // Mock users data
-  const users = [
-    {
-      id: 1,
-      name: "Ahmed Ben Ali",
-      email: "ahmed.benali@university.tn",
-      avatar: "/student-woman.png",
-      type: "Student",
-      status: "active",
-      joinDate: "2024-01-15",
-      listings: 0,
-      reports: 0,
-      verified: true,
-    },
-    {
-      id: 2,
-      name: "Amira Ben Salem",
-      email: "amira.bensalem@email.com",
-      avatar: "/tunisian-woman-profile.jpg",
-      type: "Advertiser",
-      status: "active",
-      joinDate: "2024-02-20",
-      listings: 3,
-      reports: 0,
-      verified: true,
-    },
-    {
-      id: 3,
-      name: "Mohamed Trabelsi",
-      email: "mohamed.trabelsi@email.com",
-      avatar: "/placeholder.svg?key=mohamed2",
-      type: "Student",
-      status: "suspended",
-      joinDate: "2024-03-10",
-      listings: 0,
-      reports: 2,
-      verified: false,
-    },
-  ]
+  // const users = [
+  //   {
+  //     id: 1,
+  //     name: "Ahmed Ben Ali",
+  //     email: "ahmed.benali@university.tn",
+  //     avatar: "/student-woman.png",
+  //     type: "Student",
+  //     status: "active",
+  //     joinDate: "2024-01-15",
+  //     listings: 0,
+  //     reports: 0,
+  //     verified: true,
+  //   },
+  //   {
+  //     id: 2,
+  //     name: "Amira Ben Salem",
+  //     email: "amira.bensalem@email.com",
+  //     avatar: "/tunisian-woman-profile.jpg",
+  //     type: "Advertiser",
+  //     status: "active",
+  //     joinDate: "2024-02-20",
+  //     listings: 3,
+  //     reports: 0,
+  //     verified: true,
+  //   },
+  //   {
+  //     id: 3,
+  //     name: "Mohamed Trabelsi",
+  //     email: "mohamed.trabelsi@email.com",
+  //     avatar: "/placeholder.svg?key=mohamed2",
+  //     type: "Student",
+  //     status: "suspended",
+  //     joinDate: "2024-03-10",
+  //     listings: 0,
+  //     reports: 2,
+  //     verified: false,
+  //   },
+  // ]
 
   // Mock pending listings
-  const pendingListings = [
-    {
-      id: 1,
-      title: "Modern Apartment in Tunis Center",
-      owner: "Amira Ben Salem",
-      location: "Tunis, Bab Bhar",
-      price: 350,
-      image: "/modern-student-apartment-tunis.jpg",
-      submittedDate: "2 days ago",
-      status: "pending",
-      flagged: false,
-    },
-    {
-      id: 2,
-      title: "Student Room Near Campus",
-      owner: "Sarah Mejri",
-      location: "Sfax, University District",
-      price: 280,
-      image: "/placeholder.svg?key=pending1",
-      submittedDate: "1 day ago",
-      status: "pending",
-      flagged: true,
-    },
-  ]
+  // const pendingListings = [
+  //   {
+  //     id: 1,
+  //     title: "Modern Apartment in Tunis Center",
+  //     owner: "Amira Ben Salem",
+  //     location: "Tunis, Bab Bhar",
+  //     price: 350,
+  //     image: "/modern-student-apartment-tunis.jpg",
+  //     submittedDate: "2 days ago",
+  //     status: "pending",
+  //     flagged: false,
+  //   },
+  //   {
+  //     id: 2,
+  //     title: "Student Room Near Campus",
+  //     owner: "Sarah Mejri",
+  //     location: "Sfax, University District",
+  //     price: 280,
+  //     image: "/placeholder.svg?key=pending1",
+  //     submittedDate: "1 day ago",
+  //     status: "pending",
+  //     flagged: true,
+  //   },
+  // ]
 
   // Mock reports
-  const reports = [
-    {
-      id: 1,
-      type: "inappropriate_content",
-      reportedItem: "Listing: Beach House in Sousse",
-      reportedBy: "Ahmed Ben Ali",
-      reason: "Misleading photos and description",
-      date: "1 day ago",
-      status: "pending",
-      severity: "medium",
-    },
-    {
-      id: 2,
-      type: "user_behavior",
-      reportedItem: "User: Mohamed Trabelsi",
-      reportedBy: "Fatma Khelifi",
-      reason: "Inappropriate messages and harassment",
-      date: "3 days ago",
-      status: "resolved",
-      severity: "high",
-    },
-  ]
+  // const reports = [
+  //   {
+  //     id: 1,
+  //     type: "inappropriate_content",
+  //     reportedItem: "Listing: Beach House in Sousse",
+  //     reportedBy: "Ahmed Ben Ali",
+  //     reason: "Misleading photos and description",
+  //     date: "1 day ago",
+  //     status: "pending",
+  //     severity: "medium",
+  //   },
+  //   {
+  //     id: 2,
+  //     type: "user_behavior",
+  //     reportedItem: "User: Mohamed Trabelsi",
+  //     reportedBy: "Fatma Khelifi",
+  //     reason: "Inappropriate messages and harassment",
+  //     date: "3 days ago",
+  //     status: "resolved",
+  //     severity: "high",
+  //   },
+  // ]
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -155,6 +307,8 @@ export default function AdminDashboard() {
         return "bg-yellow-100 text-yellow-800"
       case "resolved":
         return "bg-blue-100 text-blue-800"
+      case "rejected": // For listings
+        return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
@@ -173,29 +327,102 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleUserAction = async (userId: string, action: 'suspend' | 'activate' | 'delete') => {
+    if (action === 'delete') {
+      if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+    }
+    try {
+      const method = action === 'delete' ? 'DELETE' : 'PUT';
+      const body = action === 'delete' ? null : JSON.stringify({ action });
+      const headers = { 'Content-Type': 'application/json' };
+
+      const response = await fetch(`/api/admin/users/${userId}`, {
+        method,
+        headers: method === 'PUT' ? headers : undefined,
+        body,
+      });
+
+      if (response.ok) {
+        alert(`User ${action}d successfully.`);
+        fetchUsers(); // Refresh the user list
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to ${action} user: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing user:`, error);
+      alert(`An error occurred while ${action}ing the user.`);
+    }
+  };
+
+  const handleListingAction = async (listingId: string, action: 'approve' | 'reject' | 'delete') => {
+    if (action === 'delete') {
+      if (!confirm("Are you sure you want to delete this listing? This action cannot be undone.")) return;
+    }
+    try {
+      const method = action === 'delete' ? 'DELETE' : 'PUT';
+      const body = action === 'delete' ? null : JSON.stringify({ action });
+      const headers = { 'Content-Type': 'application/json' };
+
+      const response = await fetch(`/api/admin/listings/${listingId}`, {
+        method,
+        headers: method === 'PUT' ? headers : undefined,
+        body,
+      });
+
+      if (response.ok) {
+        alert(`Listing ${action}d successfully.`);
+        fetchListings(); // Refresh the listing list
+        fetchStats(); // Update stats as well
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to ${action} listing: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing listing:`, error);
+      alert(`An error occurred while ${action}ing the listing.`);
+    }
+  };
+
+  const handleReportAction = async (reportId: string, action: 'resolve' | 'take_action' | 'delete') => {
+    if (action === 'delete') {
+      if (!confirm("Are you sure you want to delete this report? This action cannot be undone.")) return;
+    }
+    try {
+      const method = action === 'delete' ? 'DELETE' : 'PUT';
+      const body = action === 'delete' ? null : JSON.stringify({ action });
+      const headers = { 'Content-Type': 'application/json' };
+
+      const response = await fetch(`/api/admin/reports/${reportId}`, {
+        method,
+        headers: method === 'PUT' ? headers : undefined,
+        body,
+      });
+
+      if (response.ok) {
+        alert(`Report ${action}d successfully.`);
+        fetchReports(); // Refresh the reports list
+        fetchStats(); // Update stats as well
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to ${action} report: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing report:`, error);
+      alert(`An error occurred while ${action}ing the report.`);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Shield className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">RoomMate TN Admin</span>
-            </Link>
-
-            <div className="flex items-center space-x-4">
-              <Badge variant="secondary">Super Admin</Badge>
-              <Avatar className="w-8 h-8">
-                <AvatarImage src={admin.avatar || "/placeholder.svg"} />
-                <AvatarFallback>AD</AvatarFallback>
-              </Avatar>
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* Removed Header component */}
+      {/*
+      <Header
+        title="RoomMate TN Admin"
+        // navLinks={[]} // Header now manages its own navigation links
+        // authButtons={false} // Header now manages its own auth buttons
+      />
+      */}
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
@@ -205,13 +432,13 @@ export default function AdminDashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-6">
                   <Avatar className="w-16 h-16">
-                    <AvatarImage src={admin.avatar || "/placeholder.svg"} />
+                    <AvatarImage src={adminProfile?.avatar_url || "/placeholder.svg"} />
                     <AvatarFallback>AD</AvatarFallback>
                   </Avatar>
                   <div>
-                    <h2 className="font-semibold text-foreground">{admin.name}</h2>
-                    <p className="text-sm text-muted-foreground">{admin.role}</p>
-                    <p className="text-xs text-muted-foreground">{admin.email}</p>
+                    <h2 className="font-semibold text-foreground">{adminProfile?.first_name} {adminProfile?.last_name}</h2>
+                    <p className="text-sm text-muted-foreground">{adminProfile?.user_type}</p>
+                    <p className="text-xs text-muted-foreground">{adminProfile?.email}</p>
                   </div>
                 </div>
 
@@ -295,8 +522,8 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground">Total Users</p>
-                          <p className="text-2xl font-bold text-foreground">{stats.totalUsers}</p>
-                          <p className="text-xs text-green-600">+{stats.newUsersThisMonth} this month</p>
+                          <p className="text-2xl font-bold text-foreground">{stats?.totalUsers}</p>
+                          <p className="text-xs text-green-600">+{stats?.newUsersThisMonth} this month</p>
                         </div>
                         <Users className="w-8 h-8 text-primary" />
                       </div>
@@ -308,8 +535,8 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground">Active Listings</p>
-                          <p className="text-2xl font-bold text-foreground">{stats.activeListings}</p>
-                          <p className="text-xs text-yellow-600">{stats.pendingListings} pending</p>
+                          <p className="text-2xl font-bold text-foreground">{stats?.activeListings}</p>
+                          <p className="text-xs text-yellow-600">{stats?.pendingListings} pending</p>
                         </div>
                         <Home className="w-8 h-8 text-primary" />
                       </div>
@@ -321,8 +548,8 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground">Platform Rating</p>
-                          <p className="text-2xl font-bold text-foreground">{stats.averageRating}</p>
-                          <p className="text-xs text-green-600">{stats.responseRate}% response rate</p>
+                          <p className="text-2xl font-bold text-foreground">{stats?.averageRating}</p>
+                          <p className="text-xs text-green-600">{stats?.responseRate}% response rate</p>
                         </div>
                         <Star className="w-8 h-8 text-primary" />
                       </div>
@@ -334,7 +561,7 @@ export default function AdminDashboard() {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm text-muted-foreground">Flagged Content</p>
-                          <p className="text-2xl font-bold text-foreground">{stats.flaggedContent}</p>
+                          <p className="text-2xl font-bold text-foreground">{stats?.flaggedContent}</p>
                           <p className="text-xs text-red-600">Requires attention</p>
                         </div>
                         <AlertTriangle className="w-8 h-8 text-red-500" />
@@ -351,27 +578,17 @@ export default function AdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                          <UserCheck className="w-5 h-5 text-green-500" />
-                          <div>
-                            <p className="text-sm text-foreground">New user registered: Ahmed Ben Ali</p>
-                            <p className="text-xs text-muted-foreground">2 hours ago</p>
+                        {/* Example: Display some recent user activity here, maybe from reports or new users */}
+                        {loading && <p>Loading recent activity...</p>}
+                        {!loading && users.slice(0, 3).map((user, index) => (
+                          <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                            <UserCheck className="w-5 h-5 text-green-500" />
+                            <div>
+                              <p className="text-sm text-foreground">New {user.user_type} registered: {user.first_name} {user.last_name}</p>
+                              <p className="text-xs text-muted-foreground">{new Date(user.created_at).toLocaleDateString()}</p>
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                          <Home className="w-5 h-5 text-primary" />
-                          <div>
-                            <p className="text-sm text-foreground">New listing submitted for review</p>
-                            <p className="text-xs text-muted-foreground">4 hours ago</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                          <Flag className="w-5 h-5 text-red-500" />
-                          <div>
-                            <p className="text-sm text-foreground">Content reported by user</p>
-                            <p className="text-xs text-muted-foreground">1 day ago</p>
-                          </div>
-                        </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
@@ -385,25 +602,26 @@ export default function AdminDashboard() {
                         <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                           <div>
                             <p className="text-sm font-medium text-foreground">Listings awaiting approval</p>
-                            <p className="text-xs text-muted-foreground">{stats.pendingListings} items</p>
+                            <p className="text-xs text-muted-foreground">{stats?.pendingListings} items</p>
                           </div>
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" onClick={() => setActiveTab("listings")}>
                             Review
                           </Button>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg border border-red-200">
                           <div>
                             <p className="text-sm font-medium text-foreground">Flagged content</p>
-                            <p className="text-xs text-muted-foreground">{stats.flaggedContent} reports</p>
+                            <p className="text-xs text-muted-foreground">{stats?.flaggedContent} reports</p>
                           </div>
-                          <Button size="sm" variant="outline">
+                          <Button size="sm" variant="outline" onClick={() => setActiveTab("reports")}>
                             Review
                           </Button>
                         </div>
+                        {/* Placeholder for user verifications, if applicable */}
                         <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
                           <div>
                             <p className="text-sm font-medium text-foreground">User verifications</p>
-                            <p className="text-xs text-muted-foreground">8 pending</p>
+                            <p className="text-xs text-muted-foreground">0 pending</p>
                           </div>
                           <Button size="sm" variant="outline">
                             Review
@@ -426,48 +644,58 @@ export default function AdminDashboard() {
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                       <Input placeholder="Search users..." className="pl-10 w-64" />
                     </div>
-                    <Button variant="outline" size="sm">
-                      <Filter className="w-4 h-4 mr-2" />
-                      Filter
-                    </Button>
+                    <Select value={userTypeFilter} onValueChange={setUserTypeFilter}>
+                      <SelectTrigger className="w-40">
+                        <Filter className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Filter by type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="student">Student</SelectItem>
+                        <SelectItem value="advertiser">Advertiser</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={userStatusFilter} onValueChange={setUserStatusFilter}>
+                      <SelectTrigger className="w-40">
+                        <Filter className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="Filter by status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="suspended">Suspended</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  {users.map((user) => (
+                  {loading && <p>Loading users...</p>}
+                  {!loading && users.map((user) => (
                     <Card key={user.id}>
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <Avatar className="w-12 h-12">
-                              <AvatarImage src={user.avatar || "/placeholder.svg"} />
+                              <AvatarImage src={user.avatar_url || "/placeholder.svg"} />
                               <AvatarFallback>
-                                {user.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")}
+                                {user.first_name?.[0]}{user.last_name?.[0]}
                               </AvatarFallback>
                             </Avatar>
                             <div>
                               <div className="flex items-center gap-2">
-                                <h3 className="font-semibold text-foreground">{user.name}</h3>
-                                {user.verified && <CheckCircle className="w-4 h-4 text-green-500" />}
+                                <h3 className="font-semibold text-foreground">{user.first_name} {user.last_name}</h3>
                               </div>
                               <p className="text-sm text-muted-foreground">{user.email}</p>
                               <div className="flex items-center gap-4 mt-1">
-                                <Badge variant="secondary">{user.type}</Badge>
+                                <Badge variant="secondary">{user.user_type}</Badge>
                                 <Badge className={getStatusColor(user.status)}>{user.status}</Badge>
-                                <span className="text-xs text-muted-foreground">Joined {user.joinDate}</span>
+                                <span className="text-xs text-muted-foreground">Joined {new Date(user.created_at).toLocaleDateString()}</span>
                               </div>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-4">
-                            <div className="text-right text-sm">
-                              <p className="text-muted-foreground">
-                                {user.listings} listings • {user.reports} reports
-                              </p>
-                            </div>
                             <div className="flex gap-2">
                               <Button variant="outline" size="sm">
                                 <Eye className="w-4 h-4 mr-2" />
@@ -478,6 +706,7 @@ export default function AdminDashboard() {
                                   variant="outline"
                                   size="sm"
                                   className="text-red-600 border-red-200 bg-transparent"
+                                  onClick={() => handleUserAction(user.id, 'suspend')}
                                 >
                                   <Ban className="w-4 h-4 mr-2" />
                                   Suspend
@@ -487,12 +716,13 @@ export default function AdminDashboard() {
                                   variant="outline"
                                   size="sm"
                                   className="text-green-600 border-green-200 bg-transparent"
+                                  onClick={() => handleUserAction(user.id, 'activate')}
                                 >
                                   <CheckCircle className="w-4 h-4 mr-2" />
                                   Activate
                                 </Button>
                               )}
-                              <Button variant="outline" size="sm" className="text-red-600 bg-transparent">
+                              <Button variant="outline" size="sm" className="text-red-600 bg-transparent" onClick={() => handleUserAction(user.id, 'delete')}>
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
@@ -510,16 +740,28 @@ export default function AdminDashboard() {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Listing Moderation</h1>
-                  <Badge variant="secondary">{pendingListings.length} pending approval</Badge>
+                  <Select value={selectedListingStatusFilter} onValueChange={setSelectedListingStatusFilter}>
+                    <SelectTrigger className="w-40">
+                      <Filter className="w-4 h-4 mr-2" />
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-4">
-                  {pendingListings.map((listing) => (
-                    <Card key={listing.id} className={listing.flagged ? "border-red-200" : ""}>
+                  {loading && <p>Loading listings...</p>}
+                  {!loading && listings.map((listing) => (
+                    <Card key={listing.id} className={listing.status === 'pending' ? "border-yellow-200" : ""}>
                       <CardContent className="p-6">
                         <div className="flex gap-4">
                           <img
-                            src={listing.image || "/placeholder.svg"}
+                            src={(listing.images && JSON.parse(listing.images)[0]) || "/placeholder.svg"}
                             alt={listing.title}
                             className="w-32 h-24 object-cover rounded-lg"
                           />
@@ -527,44 +769,42 @@ export default function AdminDashboard() {
                             <div className="flex items-start justify-between mb-2">
                               <div>
                                 <h3 className="font-semibold text-foreground">{listing.title}</h3>
-                                <p className="text-sm text-muted-foreground">by {listing.owner}</p>
+                                <p className="text-sm text-muted-foreground">by {listing.first_name} {listing.last_name}</p>
                                 <div className="flex items-center gap-2 mt-1">
                                   <MapPin className="w-4 h-4 text-muted-foreground" />
-                                  <span className="text-sm text-muted-foreground">{listing.location}</span>
+                                  <span className="text-sm text-muted-foreground">{listing.city}</span>
                                 </div>
                               </div>
                               <div className="text-right">
                                 <p className="text-lg font-bold text-primary">{listing.price} TND/month</p>
-                                <p className="text-xs text-muted-foreground">Submitted {listing.submittedDate}</p>
-                                {listing.flagged && (
-                                  <Badge className="bg-red-100 text-red-800 mt-1">
-                                    <Flag className="w-3 h-3 mr-1" />
-                                    Flagged
-                                  </Badge>
-                                )}
+                                <p className="text-xs text-muted-foreground">Submitted {new Date(listing.created_at).toLocaleDateString()}</p>
                               </div>
                             </div>
 
                             <div className="flex gap-2 mt-4">
-                              <Button size="sm" className="bg-green-600 hover:bg-green-700">
-                                <CheckCircle className="w-4 h-4 mr-2" />
-                                Approve
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-red-600 border-red-200 bg-transparent"
-                              >
-                                <XCircle className="w-4 h-4 mr-2" />
-                                Reject
-                              </Button>
+                              {listing.status === 'pending' && (
+                                <>
+                                  <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleListingAction(listing.id, 'approve')}>
+                                    <CheckCircle className="w-4 h-4 mr-2" />
+                                    Approve
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-red-600 border-red-200 bg-transparent"
+                                    onClick={() => handleListingAction(listing.id, 'reject')}
+                                  >
+                                    <XCircle className="w-4 h-4 mr-2" />
+                                    Reject
+                                  </Button>
+                                </>                                
+                              )}
                               <Button variant="outline" size="sm">
                                 <Eye className="w-4 h-4 mr-2" />
                                 Preview
                               </Button>
-                              <Button variant="outline" size="sm">
-                                <MessageSquare className="w-4 h-4 mr-2" />
-                                Contact Owner
+                              <Button variant="outline" size="sm" onClick={() => handleListingAction(listing.id, 'delete')}>
+                                <Trash2 className="w-4 h-4" />
                               </Button>
                             </div>
                           </div>
@@ -582,7 +822,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Reports & Flags</h1>
                   <div className="flex items-center gap-2">
-                    <Select defaultValue="all">
+                    <Select value={selectedReportStatusFilter} onValueChange={setSelectedReportStatusFilter}>
                       <SelectTrigger className="w-40">
                         <SelectValue />
                       </SelectTrigger>
@@ -590,48 +830,54 @@ export default function AdminDashboard() {
                         <SelectItem value="all">All Reports</SelectItem>
                         <SelectItem value="pending">Pending</SelectItem>
                         <SelectItem value="resolved">Resolved</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  {reports.map((report) => (
+                  {loading && <p>Loading reports...</p>}
+                  {!loading && reports.map((report) => (
                     <Card key={report.id}>
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between mb-4">
                           <div>
-                            <h3 className="font-semibold text-foreground">{report.reportedItem}</h3>
-                            <p className="text-sm text-muted-foreground">Reported by {report.reportedBy}</p>
-                            <p className="text-xs text-muted-foreground">{report.date}</p>
+                            <h3 className="font-semibold text-foreground">{report.listing_title || "N/A"}</h3>
+                            <p className="text-sm text-muted-foreground">Reported by {report.student_first_name} {report.student_last_name}</p>
+                            <p className="text-xs text-muted-foreground">{new Date(report.created_at).toLocaleDateString()}</p>
                           </div>
                           <div className="flex gap-2">
-                            <Badge className={getSeverityColor(report.severity)}>{report.severity}</Badge>
                             <Badge className={getStatusColor(report.status)}>{report.status}</Badge>
                           </div>
                         </div>
 
                         <div className="bg-muted/30 rounded-lg p-4 mb-4">
                           <p className="text-sm text-muted-foreground">
-                            <strong>Reason:</strong> {report.reason}
+                            <strong>Reason:</strong> {report.message}
                           </p>
                         </div>
 
                         {report.status === "pending" && (
                           <div className="flex gap-2">
-                            <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleReportAction(report.id, 'resolve')}>
                               <CheckCircle className="w-4 h-4 mr-2" />
                               Resolve
                             </Button>
-                            <Button variant="outline" size="sm">
-                              <Eye className="w-4 h-4 mr-2" />
-                              Investigate
-                            </Button>
-                            <Button variant="outline" size="sm" className="text-red-600 border-red-200 bg-transparent">
+                            <Button variant="outline" size="sm" onClick={() => handleReportAction(report.id, 'take_action')}>
                               <Ban className="w-4 h-4 mr-2" />
                               Take Action
                             </Button>
+                            <Button variant="outline" size="sm" className="text-red-600 border-red-200 bg-transparent" onClick={() => handleReportAction(report.id, 'delete')}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
+                        )}
+                        {report.status !== "pending" && (
+                          <Button variant="outline" size="sm" onClick={() => handleReportAction(report.id, 'delete')}>
+                            <Trash2 className="w-4 h-4" />
+                            Delete Report
+                          </Button>
                         )}
                       </CardContent>
                     </Card>
@@ -654,19 +900,11 @@ export default function AdminDashboard() {
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Total Users</span>
-                          <span className="font-medium">{stats.totalUsers}</span>
+                          <span className="font-medium">{stats?.totalUsers}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">New This Month</span>
-                          <span className="font-medium text-green-600">+{stats.newUsersThisMonth}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Students</span>
-                          <span className="font-medium">892</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Advertisers</span>
-                          <span className="font-medium">355</span>
+                          <span className="font-medium text-green-600">+{stats?.newUsersThisMonth}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -680,19 +918,19 @@ export default function AdminDashboard() {
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Active Listings</span>
-                          <span className="font-medium">{stats.activeListings}</span>
+                          <span className="font-medium">{stats?.activeListings}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Pending Approval</span>
-                          <span className="font-medium text-yellow-600">{stats.pendingListings}</span>
+                          <span className="font-medium text-yellow-600">{stats?.pendingListings}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Average Price</span>
-                          <span className="font-medium">325 TND</span>
+                          <span className="font-medium">N/A</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Most Popular City</span>
-                          <span className="font-medium">Tunis</span>
+                          <span className="font-medium">N/A</span>
                         </div>
                       </div>
                     </CardContent>
@@ -706,19 +944,19 @@ export default function AdminDashboard() {
                       <div className="space-y-4">
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Average Rating</span>
-                          <span className="font-medium">{stats.averageRating}/5</span>
+                          <span className="font-medium">{stats?.averageRating}/5</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Response Rate</span>
-                          <span className="font-medium">{stats.responseRate}%</span>
+                          <span className="font-medium">N/A</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Active Reports</span>
-                          <span className="font-medium text-red-600">{stats.flaggedContent}</span>
+                          <span className="font-medium text-red-600">{stats?.flaggedContent}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">User Satisfaction</span>
-                          <span className="font-medium text-green-600">92%</span>
+                          <span className="font-medium">N/A</span>
                         </div>
                       </div>
                     </CardContent>
@@ -730,25 +968,8 @@ export default function AdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
-                        {[
-                          { city: "Tunis", listings: 45, percentage: 51 },
-                          { city: "Sfax", listings: 23, percentage: 26 },
-                          { city: "Sousse", listings: 12, percentage: 13 },
-                          { city: "Monastir", listings: 9, percentage: 10 },
-                        ].map((city, index) => (
-                          <div key={index} className="flex items-center justify-between">
-                            <span className="text-sm text-foreground">{city.city}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-muted-foreground">{city.listings}</span>
-                              <div className="w-16 h-2 bg-muted rounded-full">
-                                <div
-                                  className="h-full bg-primary rounded-full"
-                                  style={{ width: `${city.percentage}%` }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                        {/* Placeholder for top cities, if available from stats API */}
+                        <p className="text-muted-foreground">Data not available</p>
                       </div>
                     </CardContent>
                   </Card>
@@ -854,17 +1075,17 @@ export default function AdminDashboard() {
                           "System errors and alerts",
                           "Weekly analytics reports",
                         ].map((notification, index) => (
-                          <div key={index} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id={`notif-${index}`}
-                              defaultChecked={index < 4}
-                              className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
-                            />
-                            <Label htmlFor={`notif-${index}`} className="text-sm">
-                              {notification}
-                            </Label>
-                          </div>
+                            <div key={index} className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`notif-${index}`}
+                                defaultChecked={index < 4}
+                                className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                              />
+                              <Label htmlFor={`notif-${index}`} className="text-sm">
+                                {notification}
+                              </Label>
+                            </div>
                         ))}
                       </div>
                     </CardContent>

@@ -22,11 +22,36 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 
+interface Announcement {
+  id: string
+  user_id: string
+  title: string
+  content: string
+  category: string
+  city: string | null
+  price: number | null
+  contact_info: string
+  created_at: string
+  first_name: string
+  last_name: string
+  university: string | null
+  avatar_url: string | null
+}
+
+interface User {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  university: string
+  avatar_url: string
+}
+
 export default function AnnouncementsPage() {
-  const [announcements, setAnnouncements] = useState<any[]>([])
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [newAnnouncement, setNewAnnouncement] = useState({
@@ -35,19 +60,97 @@ export default function AnnouncementsPage() {
     category: "general",
     location: "",
     price: "",
-    contact_info: "",
+    contactInfo: {
+      email: "",
+      phone: ""
+    }
   })
 
-
   const categories = [
-    { value: "roommate_search", label: "Roommate Search", icon: Users },
+    { value: "roommate", label: "Roommate Search", icon: Users },
     { value: "study_group", label: "Study Groups", icon: BookOpen },
-    { value: "events", label: "Events", icon: Coffee },
+    { value: "event", label: "Events", icon: Coffee },
     { value: "marketplace", label: "Marketplace", icon: ShoppingBag },
-    { value: "general", label: "General", icon: MessageCircle },
+    { value: "other", label: "General", icon: MessageCircle },
   ]
 
+  // Charger les annonces
+  useEffect(() => {
+    fetchAnnouncements()
+    checkUserSession()
+  }, [searchTerm, selectedCategory])
 
+  const fetchAnnouncements = async () => {
+    try {
+      setLoading(true)
+      const params = new URLSearchParams()
+      if (selectedCategory !== "all") params.append("category", selectedCategory)
+      if (searchTerm) params.append("search", searchTerm)
+
+      const response = await fetch(`/api/announcements?${params}`)
+      if (response.ok) {
+        const data = await response.json()
+        setAnnouncements(data)
+      }
+    } catch (error) {
+      console.error("Error fetching announcements:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const checkUserSession = () => {
+    // Vérifier si l'utilisateur est connecté
+    const userData = localStorage.getItem("user")
+    if (userData) {
+      setUser(JSON.parse(userData))
+    }
+  }
+
+  const handleCreateAnnouncement = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!user) {
+      alert("Please log in to create an announcement")
+      return
+    }
+
+    try {
+      const response = await fetch("/api/announcements", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          title: newAnnouncement.title,
+          content: newAnnouncement.content,
+          category: newAnnouncement.category,
+          location: newAnnouncement.location,
+          price: newAnnouncement.price ? parseFloat(newAnnouncement.price) : null,
+          contactInfo: newAnnouncement.contactInfo
+        })
+      })
+
+      if (response.ok) {
+        setShowCreateForm(false)
+        setNewAnnouncement({
+          title: "",
+          content: "",
+          category: "general",
+          location: "",
+          price: "",
+          contactInfo: { email: "", phone: "" }
+        })
+        fetchAnnouncements() // Recharger les annonces
+      } else {
+        alert("Error creating announcement")
+      }
+    } catch (error) {
+      console.error("Error creating announcement:", error)
+      alert("Error creating announcement")
+    }
+  }
 
   const filteredAnnouncements = announcements.filter((announcement) => {
     const matchesSearch =
@@ -67,38 +170,24 @@ export default function AnnouncementsPage() {
     return cat ? cat.label : "General"
   }
 
+  const parseContactInfo = (contactInfo: string) => {
+    try {
+      return JSON.parse(contactInfo)
+    } catch {
+      return { email: "", phone: "" }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">RoomMate TN</span>
-            </Link>
-
-            <div className="flex items-center space-x-4">
-              {user ? (
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/dashboard/student">Dashboard</Link>
-                </Button>
-              ) : (
-                <>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href="/auth/login">Sign In</Link>
-                  </Button>
-                  <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
-                    <Link href="/auth/signup">Get Started</Link>
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* Removed Header component */}
+      {/*
+      <Header
+        // isLoggedIn={!!user} // Header now manages its own login state
+        // navLinks={[]} // Header now manages its own navigation links
+        // authButtons={true} // Header now manages its own auth buttons
+      />
+      */}
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -199,14 +288,26 @@ export default function AnnouncementsPage() {
                   onChange={(e) => setNewAnnouncement({ ...newAnnouncement, price: e.target.value })}
                 />
                 <Input
-                  placeholder="Contact info (optional)"
-                  value={newAnnouncement.contact_info}
-                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, contact_info: e.target.value })}
+                  placeholder="Email for contact"
+                  type="email"
+                  value={newAnnouncement.contactInfo.email}
+                  onChange={(e) => setNewAnnouncement({ 
+                    ...newAnnouncement, 
+                    contactInfo: { ...newAnnouncement.contactInfo, email: e.target.value } 
+                  })}
+                />
+                <Input
+                  placeholder="Phone (optional)"
+                  value={newAnnouncement.contactInfo.phone}
+                  onChange={(e) => setNewAnnouncement({ 
+                    ...newAnnouncement, 
+                    contactInfo: { ...newAnnouncement.contactInfo, phone: e.target.value } 
+                  })}
                 />
               </div>
 
               <div className="flex gap-2">
-                <Button  className="bg-primary hover:bg-primary/90">
+                <Button onClick={handleCreateAnnouncement} className="bg-primary hover:bg-primary/90">
                   Post Announcement
                 </Button>
                 <Button variant="outline" onClick={() => setShowCreateForm(false)}>
@@ -227,6 +328,8 @@ export default function AnnouncementsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAnnouncements.map((announcement) => {
               const CategoryIcon = getCategoryIcon(announcement.category)
+              const contactInfo = parseContactInfo(announcement.contact_info)
+              
               return (
                 <Card key={announcement.id} className="hover-lift cursor-pointer">
                   <CardContent className="p-6">
@@ -244,12 +347,12 @@ export default function AnnouncementsPage() {
 
                     <p className="text-muted-foreground text-sm mb-4 line-clamp-3">{announcement.content}</p>
 
-                    {(announcement.location || announcement.price) && (
+                    {(announcement.city || announcement.price) && (
                       <div className="flex items-center gap-4 mb-4 text-xs text-muted-foreground">
-                        {announcement.location && (
+                        {announcement.city && (
                           <div className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
-                            {announcement.location}
+                            {announcement.city}
                           </div>
                         )}
                         {announcement.price && <div className="font-medium text-primary">{announcement.price} TND</div>}
@@ -259,24 +362,25 @@ export default function AnnouncementsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Avatar className="w-6 h-6">
-                          <AvatarImage src={announcement.profiles?.avatar_url || "/placeholder.svg"} />
+                          <AvatarImage src={announcement.avatar_url || "/placeholder.svg"} />
                           <AvatarFallback className="text-xs">
-                            {announcement.profiles?.full_name
-                              ?.split(" ")
-                              .map((n: string) => n[0])
-                              .join("") || "U"}
+                            {announcement.first_name?.[0]}{announcement.last_name?.[0]}
                           </AvatarFallback>
                         </Avatar>
                         <div className="text-xs">
-                          <div className="font-medium text-foreground">{announcement.profiles?.full_name}</div>
-                          <div className="text-muted-foreground">{announcement.profiles?.university}</div>
+                          <div className="font-medium text-foreground">
+                            {announcement.first_name} {announcement.last_name}
+                          </div>
+                          <div className="text-muted-foreground">{announcement.university}</div>
                         </div>
                       </div>
 
-                      {announcement.contact_info && (
-                        <Button size="sm" variant="outline">
-                          <MessageCircle className="w-3 h-3 mr-1" />
-                          Contact
+                      {contactInfo.email && (
+                        <Button size="sm" variant="outline" asChild>
+                          <a href={`mailto:${contactInfo.email}`}>
+                            <MessageCircle className="w-3 h-3 mr-1" />
+                            Contact
+                          </a>
                         </Button>
                       )}
                     </div>

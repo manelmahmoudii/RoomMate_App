@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input"
 import { Search, MapPin, Users, Star, Heart, ArrowRight, CheckCircle, Shield, Clock } from "lucide-react"
 import Link from "next/link"
 import { cookies } from "next/headers"
-import Header from "./header/page"
 
 export default async function HomePage() {
    const cookieStore = cookies();
@@ -13,9 +12,6 @@ export default async function HomePage() {
    
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-       <Header isLoggedIn={isLoggedIn} />
-
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-secondary/5">
         <div className="absolute inset-0 bg-[url('/vibrant-tunisian-students-studying-together-in-mod.jpg')] bg-cover bg-center opacity-10"></div>

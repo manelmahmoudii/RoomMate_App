@@ -25,8 +25,35 @@ export default function SearchPage() {
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [sortBy, setSortBy] = useState("newest")
 
+  useEffect(() => {
+    fetchListings();
+  }, [searchTerm, selectedCity, selectedRoommates, priceRange, verifiedOnly, sortBy]);
 
+  const fetchListings = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (searchTerm) params.append("search", searchTerm);
+      if (selectedCity !== "all") params.append("city", selectedCity);
+      if (selectedRoommates !== "any") params.append("max_roommates", selectedRoommates);
+      params.append("min_price", priceRange[0].toString());
+      params.append("max_price", priceRange[1].toString());
+      if (verifiedOnly) params.append("verified", "true");
+      params.append("sort_by", sortBy);
 
+      const response = await fetch(`/api/listings?${params.toString()}`);
+      if (response.ok) {
+        const data = await response.json();
+        setListings(data);
+      } else {
+        console.error("Failed to fetch listings");
+      }
+    } catch (error) {
+      console.error("Error fetching listings:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const ListingCard = ({ listing, isListView = false }: { listing: any; isListView?: boolean }) => (
     <Card
@@ -105,47 +132,7 @@ export default function SearchPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
-      <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">RoomMate TN</span>
-            </Link>
-
-            <div className="hidden md:flex items-center space-x-8">
-              <Link href="/search" className="text-primary font-medium">
-                Search Rooms
-              </Link>
-              <Link href="/announcements" className="text-muted-foreground hover:text-foreground transition-colors">
-                Announcements
-              </Link>
-              <Link href="#" className="text-muted-foreground hover:text-foreground transition-colors">
-                Post Room
-              </Link>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              {user ? (
-                <Button variant="ghost" size="sm" asChild>
-                  <Link href="/dashboard/student">Dashboard</Link>
-                </Button>
-              ) : (
-                <>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href="/auth/login">Sign In</Link>
-                  </Button>
-                  <Button size="sm" className="bg-primary hover:bg-primary/90" asChild>
-                    <Link href="/auth/signup">Get Started</Link>
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
@@ -245,13 +232,13 @@ export default function SearchPage() {
 
                   {/* Verified Only */}
                   <div className="flex items-center space-x-2">
-                    <Checkbox id="verified" checked={verifiedOnly} />
+                    <Checkbox id="verified" checked={verifiedOnly} onCheckedChange={(checked) => setVerifiedOnly(!!checked)} />
                     <Label htmlFor="verified" className="text-sm text-muted-foreground">
                       Verified listings only
                     </Label>
                   </div>
 
-                  <Button className="w-full bg-primary hover:bg-primary/90">Apply Filters</Button>
+                  <Button className="w-full bg-primary hover:bg-primary/90" onClick={fetchListings}>Apply Filters</Button>
                 </div>
               </CardContent>
             </Card>

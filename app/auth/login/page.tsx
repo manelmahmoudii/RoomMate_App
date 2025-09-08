@@ -102,7 +102,7 @@ export default function LoginPage() {
       
       let redirectPath = "/"
       if (userRole === "admin" || userRole === "administrator") {
-        redirectPath = "/admin/dashboard"
+        redirectPath = "/dashboard/admin/"
       } else if (userRole === "advertiser" || userRole === "property_owner" || userRole === "agency") {
         redirectPath = "/dashboard/advertiser"
       } else if (userRole === "student") {

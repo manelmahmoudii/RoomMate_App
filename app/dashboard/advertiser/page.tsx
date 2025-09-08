@@ -170,40 +170,14 @@ export default function AdvertiserDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Navigation */}
-      <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Users className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">RoomMate TN</span>
-            </Link>
-
-            <div className="hidden md:flex items-center space-x-8">
-              <Link href="/search" className="text-muted-foreground hover:text-foreground transition-colors">
-                Browse Listings
-              </Link>
-              <Link href="/dashboard/advertiser" className="text-primary font-medium">
-                Dashboard
-              </Link>
-            </div>
-
-            <div className="flex items-center space-x-4">
-              <Avatar className="w-8 h-8">
-                <AvatarImage src={advertiser.avatar || "/placeholder.svg"} />
-                <AvatarFallback>
-                  {advertiser.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
-                </AvatarFallback>
-              </Avatar>
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* Removed Header component */}
+      {/*
+      <Header
+        title="RoomMate TN Advertiser"
+        // navLinks={[]} // Header now manages its own navigation links
+        // authButtons={false} // Header now manages its own auth buttons
+      />
+      */}
 
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
@@ -214,25 +188,24 @@ export default function AdvertiserDashboard() {
                 <div className="flex items-center gap-4 mb-6">
                   <div className="relative">
                     <Avatar className="w-16 h-16">
-                      <AvatarImage src={advertiser.avatar || "/placeholder.svg"} />
+                      <AvatarImage src={advertiserProfile?.avatar_url || "/placeholder.svg"} />
                       <AvatarFallback>
-                        {advertiser.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
+                        {advertiserProfile?.first_name?.[0]}{advertiserProfile?.last_name?.[0]}
                       </AvatarFallback>
                     </Avatar>
-                    {advertiser.verified && (
+                    {/* Assuming verification status is part of the profile data */}
+                    {advertiserProfile?.status === 'active' && (
                       <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
                         <CheckCircle className="w-4 h-4 text-white" />
                       </div>
                     )}
                   </div>
                   <div>
-                    <h2 className="font-semibold text-foreground">{advertiser.name}</h2>
-                    <p className="text-sm text-muted-foreground">{advertiser.accountType}</p>
+                    <h2 className="font-semibold text-foreground">{advertiserProfile?.first_name} {advertiserProfile?.last_name}</h2>
+                    <p className="text-sm text-muted-foreground">{advertiserProfile?.user_type}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                      {/* Assuming rating will come from analytics or a separate profile endpoint */}
                       <span className="text-sm font-medium">{advertiser.rating}</span>
                       <span className="text-xs text-muted-foreground">({advertiser.totalReviews})</span>
                     </div>
