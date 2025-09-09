@@ -15,11 +15,11 @@ export default async function HomePage() {
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-secondary/5">
         <div className="absolute inset-0 bg-[url('/vibrant-tunisian-students-studying-together-in-mod.jpg')] bg-cover bg-center opacity-10"></div>
-        <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-32">
+        <div className="relative container mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-24 lg:pt-24 lg:pb-32">
           <div className="text-center max-w-4xl mx-auto">
-            <Badge className="mb-6 px-6 py-3 text-base font-semibold animate-scale-in bg-primary/20 text-primary border border-primary/30">
-              <img src="/tn.png" alt="Tunisia Flag" className="w-5 h-5  mr-2"/>
-            Made for Tunisian Students
+            <Badge className="mb-6 px-6 py-3 text-base font-medium animate-scale-in bg-primary/20 text-primary border-primary/30 hover:bg-primary/30 smooth-transition">
+              <span className="text-2xl mr-3">🇹🇳</span>
+              Made for Tunisian Students
             </Badge>
 
 
