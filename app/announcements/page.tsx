@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import {
   Users,
   Plus,
@@ -19,6 +20,7 @@ import {
   Coffee,
   Filter,
   ArrowLeft,
+  Upload, // Imported Upload icon
 } from "lucide-react"
 import Link from "next/link"
 
@@ -36,6 +38,7 @@ interface Announcement {
   last_name: string
   university: string | null
   avatar_url: string | null
+  images: string | null; // Added images field (JSON string or null)
 }
 
 interface User {
@@ -45,6 +48,8 @@ interface User {
   last_name: string
   university: string
   avatar_url: string
+  // Add user_type to User interface if needed for conditional rendering
+  user_type?: string;
 }
 
 export default function AnnouncementsPage() {
@@ -63,7 +68,9 @@ export default function AnnouncementsPage() {
     contactInfo: {
       email: "",
       phone: ""
-    }
+    },
+    imageFile: null as File | null, // Corrected type and initial value
+    imagePreview: null as string | null, // Corrected type and initial value
   })
 
   const categories = [
@@ -99,13 +106,21 @@ export default function AnnouncementsPage() {
     }
   }
 
-  const checkUserSession = () => {
-    // Vérifier si l'utilisateur est connecté
-    const userData = localStorage.getItem("user")
-    if (userData) {
-      setUser(JSON.parse(userData))
+  const checkUserSession = async () => {
+    // Use the /api/auth/session endpoint to check if the user is logged in
+    try {
+      const response = await fetch("/api/auth/session", { credentials: "include" });
+      if (response.ok) {
+        const userData = await response.json();
+        setUser(userData);
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error("Error checking user session:", error);
+      setUser(null);
     }
-  }
+  };
 
   const handleCreateAnnouncement = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -115,6 +130,35 @@ export default function AnnouncementsPage() {
       return
     }
 
+    setLoading(true);
+    let imageUrl: string | null = null;
+    if (newAnnouncement.imageFile) {
+      const formData = new FormData();
+      formData.append("file", newAnnouncement.imageFile);
+
+      try {
+        const uploadResponse = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (uploadResponse.ok) {
+          const uploadData = await uploadResponse.json();
+          imageUrl = uploadData.imageUrl;
+        } else {
+          const errorData = await uploadResponse.json();
+          alert(`Failed to upload image: ${errorData.message || uploadResponse.statusText}`);
+          setLoading(false);
+          return;
+        }
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        alert("An error occurred while uploading the image.");
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       const response = await fetch("/api/announcements", {
         method: "POST",
@@ -122,13 +166,14 @@ export default function AnnouncementsPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userId: user.id,
+          // userId is now retrieved from the session on the server-side, not sent from client
           title: newAnnouncement.title,
           content: newAnnouncement.content,
           category: newAnnouncement.category,
           location: newAnnouncement.location,
           price: newAnnouncement.price ? parseFloat(newAnnouncement.price) : null,
-          contactInfo: newAnnouncement.contactInfo
+          contactInfo: newAnnouncement.contactInfo,
+          images: imageUrl ? [imageUrl] : [], // Include image URL
         })
       })
 
@@ -140,7 +185,9 @@ export default function AnnouncementsPage() {
           category: "general",
           location: "",
           price: "",
-          contactInfo: { email: "", phone: "" }
+          contactInfo: { email: "", phone: "" },
+          imageFile: null,
+          imagePreview: null,
         })
         fetchAnnouncements() // Recharger les annonces
       } else {
@@ -149,6 +196,8 @@ export default function AnnouncementsPage() {
     } catch (error) {
       console.error("Error creating announcement:", error)
       alert("Error creating announcement")
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -177,6 +226,17 @@ export default function AnnouncementsPage() {
       return { email: "", phone: "" }
     }
   }
+
+  const getAnnouncementImages = (imagesString: string | null) => {
+    if (!imagesString) return [];
+    try {
+      const images = JSON.parse(imagesString);
+      return Array.isArray(images) ? images : [];
+    } catch (e) {
+      console.error("Error parsing announcement images JSON string:", imagesString, e);
+      return [];
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -239,85 +299,6 @@ export default function AnnouncementsPage() {
           </Select>
         </div>
 
-        {/* Create Form */}
-        {showCreateForm && user && (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Create New Announcement</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Input
-                placeholder="Announcement title..."
-                value={newAnnouncement.title}
-                onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
-              />
-
-              <Select
-                value={newAnnouncement.category}
-                onValueChange={(value) => setNewAnnouncement({ ...newAnnouncement, category: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.value} value={category.value}>
-                      {category.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Textarea
-                placeholder="Write your announcement..."
-                rows={4}
-                value={newAnnouncement.content}
-                onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Input
-                  placeholder="Location (optional)"
-                  value={newAnnouncement.location}
-                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, location: e.target.value })}
-                />
-                <Input
-                  placeholder="Price (optional)"
-                  type="number"
-                  value={newAnnouncement.price}
-                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, price: e.target.value })}
-                />
-                <Input
-                  placeholder="Email for contact"
-                  type="email"
-                  value={newAnnouncement.contactInfo.email}
-                  onChange={(e) => setNewAnnouncement({ 
-                    ...newAnnouncement, 
-                    contactInfo: { ...newAnnouncement.contactInfo, email: e.target.value } 
-                  })}
-                />
-                <Input
-                  placeholder="Phone (optional)"
-                  value={newAnnouncement.contactInfo.phone}
-                  onChange={(e) => setNewAnnouncement({ 
-                    ...newAnnouncement, 
-                    contactInfo: { ...newAnnouncement.contactInfo, phone: e.target.value } 
-                  })}
-                />
-              </div>
-
-              <div className="flex gap-2">
-                <Button onClick={handleCreateAnnouncement} className="bg-primary hover:bg-primary/90">
-                  Post Announcement
-                </Button>
-                <Button variant="outline" onClick={() => setShowCreateForm(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Announcements Grid */}
         {loading ? (
           <div className="text-center py-12">
@@ -329,9 +310,10 @@ export default function AnnouncementsPage() {
             {filteredAnnouncements.map((announcement) => {
               const CategoryIcon = getCategoryIcon(announcement.category)
               const contactInfo = parseContactInfo(announcement.contact_info)
+              const images = getAnnouncementImages(announcement.images);
               
               return (
-                <Card key={announcement.id} className="hover-lift cursor-pointer">
+                <Card key={announcement.id} className="hover-lift cursor-pointer group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between mb-4">
                       <Badge variant="secondary" className="flex items-center gap-1">
@@ -342,6 +324,12 @@ export default function AnnouncementsPage() {
                         {new Date(announcement.created_at).toLocaleDateString()}
                       </span>
                     </div>
+
+                    {images.length > 0 && (
+                      <div className="mb-4">
+                        <img src={images[0]} alt={announcement.title} className="w-full h-48 object-cover rounded-md" />
+                      </div>
+                    )}
 
                     <h3 className="font-semibold text-foreground mb-2 line-clamp-2">{announcement.title}</h3>
 
@@ -409,6 +397,130 @@ export default function AnnouncementsPage() {
           </div>
         )}
       </div>
+
+      {/* Create Announcement Modal */}
+      {showCreateForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-out opacity-0 animate-fade-in-modal">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto transform scale-95 transition-all duration-300 ease-out animate-scale-in-modal">
+            <CardHeader>
+              <CardTitle>Create New Announcement</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={handleCreateAnnouncement}>
+                <Input
+                  placeholder="Announcement title..."
+                  value={newAnnouncement.title}
+                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
+                  className="mb-4"
+                  required
+                />
+
+                <Select
+                  value={newAnnouncement.category}
+                  onValueChange={(value) => setNewAnnouncement({ ...newAnnouncement, category: value })}
+                  required
+                >
+                  <SelectTrigger className="w-full mb-4"> {/* className moved to SelectTrigger */}
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.value} value={category.value}>
+                        {category.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Textarea
+                  placeholder="Write your announcement..."
+                  rows={4}
+                  value={newAnnouncement.content}
+                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
+                  className="mb-4"
+                  required
+                />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                  <Input
+                    placeholder="Location (optional)"
+                    value={newAnnouncement.location}
+                    onChange={(e) => setNewAnnouncement({ ...newAnnouncement, location: e.target.value })}
+                  />
+                  <Input
+                    placeholder="Price (optional)"
+                    type="number"
+                    value={newAnnouncement.price}
+                    onChange={(e) => setNewAnnouncement({ ...newAnnouncement, price: e.target.value })}
+                  />
+                  <Input
+                    placeholder="Email for contact"
+                    type="email"
+                    value={newAnnouncement.contactInfo.email}
+                    onChange={(e) => setNewAnnouncement({ 
+                      ...newAnnouncement, 
+                      contactInfo: { ...newAnnouncement.contactInfo, email: e.target.value } 
+                    })}
+                  />
+                  <Input
+                    placeholder="Phone (optional)"
+                    value={newAnnouncement.contactInfo.phone}
+                    onChange={(e) => setNewAnnouncement({ 
+                      ...newAnnouncement, 
+                      contactInfo: { ...newAnnouncement.contactInfo, phone: e.target.value } 
+                    })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="announcementImage">Announcement Image (Optional)</Label>
+                  <div
+                    className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-muted/30 transition-colors"
+                    onClick={() => document.getElementById("announcement-image-upload-form")?.click()}
+                  >
+                    <input
+                      id="announcement-image-upload-form"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setNewAnnouncement(prev => ({ ...prev, imageFile: file }));
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setNewAnnouncement(prev => ({ ...prev, imagePreview: reader.result as string }));
+                          };
+                          reader.readAsDataURL(file);
+                        } else {
+                          setNewAnnouncement(prev => ({ ...prev, imageFile: null, imagePreview: null }));
+                        }
+                      }}
+                    />
+                    {newAnnouncement.imagePreview ? (
+                      <img src={newAnnouncement.imagePreview} alt="Announcement Image Preview" className="max-h-40 mx-auto mb-2 object-contain" />
+                    ) : (
+                      <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      {newAnnouncement.imagePreview ? "Click to change image" : "Click to upload an image or drag and drop"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90" disabled={loading}>
+                    {loading ? "Posting..." : "Post Announcement"}
+                  </Button>
+                  <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setShowCreateForm(false)} type="button">
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

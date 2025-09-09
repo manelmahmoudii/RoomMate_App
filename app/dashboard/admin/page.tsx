@@ -518,7 +518,7 @@ export default function AdminDashboard() {
           <div className="flex-1">
             {/* Overview Tab */}
             {activeTab === "overview" && (
-              <div className="space-y-6">
+              <div key="overview" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Platform Overview</h1>
                   <Select value={selectedTimeRange} onValueChange={setSelectedTimeRange}>
@@ -535,7 +535,7 @@ export default function AdminDashboard() {
 
                 {/* Key Metrics */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -548,7 +548,7 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -561,7 +561,7 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -574,7 +574,7 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -654,7 +654,7 @@ export default function AdminDashboard() {
 
             {/* Users Tab */}
             {activeTab === "users" && (
-              <div className="space-y-6">
+              <div key="users" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">User Management</h1>
                   <div className="flex items-center gap-2">
@@ -690,7 +690,7 @@ export default function AdminDashboard() {
                 <div className="space-y-4">
                   {loading && <p>Loading users...</p>}
                   {!loading && users.map((user) => (
-                    <Card key={user.id}>
+                    <Card key={user.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
@@ -755,7 +755,7 @@ export default function AdminDashboard() {
 
             {/* Listings Tab */}
             {activeTab === "listings" && (
-              <div className="space-y-6">
+              <div key="listings" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Listing Moderation</h1>
                   <Select value={selectedListingStatusFilter} onValueChange={setSelectedListingStatusFilter}>
@@ -775,7 +775,7 @@ export default function AdminDashboard() {
                 <div className="space-y-4">
                   {loading && <p>Loading listings...</p>}
                   {!loading && listings.map((listing) => (
-                    <Card key={listing.id} className={listing.status === 'pending' ? "border-yellow-200" : ""}>
+                    <Card key={listing.id} className={`group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out ${listing.status === 'pending' ? "border-yellow-200" : ""}`}>
                       <CardContent className="p-6">
                         <div className="flex gap-4">
                           <img
@@ -836,7 +836,7 @@ export default function AdminDashboard() {
 
             {/* Reports Tab */}
             {activeTab === "reports" && (
-              <div className="space-y-6">
+              <div key="reports" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Reports & Flags</h1>
                   <div className="flex items-center gap-2">
@@ -857,7 +857,7 @@ export default function AdminDashboard() {
                 <div className="space-y-4">
                   {loading && <p>Loading reports...</p>}
                   {!loading && reports.map((report) => (
-                    <Card key={report.id}>
+                    <Card key={report.id} className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between mb-4">
                           <div>
@@ -906,11 +906,11 @@ export default function AdminDashboard() {
 
             {/* Analytics Tab */}
             {activeTab === "analytics" && (
-              <div className="space-y-6">
+              <div key="analytics" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <h1 className="text-3xl font-bold text-foreground">Platform Analytics</h1>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardHeader>
                       <CardTitle>User Growth</CardTitle>
                     </CardHeader>
@@ -928,7 +928,7 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardHeader>
                       <CardTitle>Listing Statistics</CardTitle>
                     </CardHeader>
@@ -954,7 +954,7 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardHeader>
                       <CardTitle>Platform Health</CardTitle>
                     </CardHeader>
@@ -980,7 +980,7 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardHeader>
                       <CardTitle>Top Cities</CardTitle>
                     </CardHeader>
@@ -997,11 +997,11 @@ export default function AdminDashboard() {
 
             {/* Settings Tab */}
             {activeTab === "settings" && (
-              <div className="space-y-6">
+              <div key="settings" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <h1 className="text-3xl font-bold text-foreground">System Settings</h1>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardHeader>
                       <CardTitle>Platform Configuration</CardTitle>
                     </CardHeader>
@@ -1034,7 +1034,7 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardHeader>
                       <CardTitle>Moderation Settings</CardTitle>
                     </CardHeader>
@@ -1080,7 +1080,7 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardHeader>
                       <CardTitle>Email Notifications</CardTitle>
                     </CardHeader>
@@ -1109,7 +1109,7 @@ export default function AdminDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardHeader>
                       <CardTitle>Backup & Maintenance</CardTitle>
                     </CardHeader>

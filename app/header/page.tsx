@@ -7,17 +7,25 @@ import { usePathname } from "next/navigation"
 import { useState, useEffect } from "react"
 // Removed: import Cookies from 'js-cookie';
 // Removed: import { jwtDecode } from "jwt-decode";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
   title?: string
   isLoggedIn: boolean; // Now a required prop
   userRole: string | null; // Now a required prop
+  userFirstName?: string; // New prop for first name
+  userLastName?: string;  // New prop for last name
+  userAvatarUrl?: string; // New prop for avatar URL
 }
 
 export default function Header({
   title = "RoomMate TN",
   isLoggedIn, // Receive as prop
   userRole,   // Receive as prop
+  userFirstName, // Receive as prop
+  userLastName,  // Receive as prop
+  userAvatarUrl, // Receive as prop
 }: HeaderProps) {
   const pathname = usePathname()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -40,11 +48,6 @@ export default function Header({
     { href: getDashboardPath(), label: "Dashboard", authRequired: true, roles: ["student", "advertiser", "admin"] }, // Dynamic dashboard link
   ];
   
-  // Add 'Post Room' link only for advertisers when logged in
-  if (isLoggedIn && userRole === 'advertiser') {
-    defaultNavLinks.splice(4, 0, { href: "/dashboard/advertiser", label: "Post Room", authRequired: true, roles: ["advertiser"] });
-  }
-
   // Filter navigation links based on login status and role
   const filteredNavLinks = defaultNavLinks.filter(link => {
     if (!link.authRequired) {
@@ -150,7 +153,7 @@ export default function Header({
           <div className="hidden md:flex items-center space-x-8">
             {filteredNavLinks.map((link) => (
               <Link
-                key={link.href}
+                key={`${link.href}-${link.label}`}
                 href={link.href}
                 className={`transition-all duration-200 hover:text-foreground ${
                   isActiveLink(link.href)
@@ -203,6 +206,16 @@ export default function Header({
                     Logout
                   </Button>
                 </form>
+                {userAvatarUrl ? (
+                  <Avatar className="w-8 h-8">
+                    <AvatarImage src={userAvatarUrl} alt={`${userFirstName} ${userLastName}`} />
+                    <AvatarFallback>{userFirstName?.[0]}{userLastName?.[0]}</AvatarFallback>
+                  </Avatar>
+                ) : (userFirstName && userLastName && (
+                  <Avatar className="w-8 h-8">
+                    <AvatarFallback>{userFirstName?.[0]}{userLastName?.[0]}</AvatarFallback>
+                  </Avatar>
+                ))}
               </div>
             )}
           </div>
@@ -236,7 +249,7 @@ export default function Header({
             <div className="flex flex-col space-y-3 px-2">
               {filteredNavLinks.map((link) => (
                 <Link
-                  key={link.href}
+                  key={`${link.href}-${link.label}`}
                   href={link.href}
                   className={`py-3 px-4 rounded-md transition-all duration-200 transform hover:translate-x-1 ${
                     isActiveLink(link.href) 
@@ -293,6 +306,16 @@ export default function Header({
                       Logout
                     </Button>
                   </form>
+                  {userAvatarUrl ? (
+                    <Avatar className="w-8 h-8 mx-auto mt-4">
+                      <AvatarImage src={userAvatarUrl} alt={`${userFirstName} ${userLastName}`} />
+                      <AvatarFallback>{userFirstName?.[0]}{userLastName?.[0]}</AvatarFallback>
+                    </Avatar>
+                  ) : (userFirstName && userLastName && (
+                    <Avatar className="w-8 h-8 mx-auto mt-4">
+                      <AvatarFallback>{userFirstName?.[0]}{userLastName?.[0]}</AvatarFallback>
+                    </Avatar>
+                  ))}
                 </div>
               )}
             </div>

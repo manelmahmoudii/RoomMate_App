@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     connection = await getConnection();
     const body = await request.json();
 
-    const { title, content, category, location, price, contactInfo } = body;
+    const { title, content, category, location, price, contactInfo, images } = body; // Added images
 
     // Validation basique
     if (!title || !content || !category) {
@@ -79,9 +79,9 @@ export async function POST(request: NextRequest) {
 
     const query = `
       INSERT INTO announcements 
-        (id, user_id, title, content, category, city, price, contact_info, created_at)
+        (id, user_id, title, content, category, city, price, contact_info, images, created_at)
       VALUES 
-        (UUID(), ?, ?, ?, ?, ?, ?, ?, NOW())
+        (UUID(), ?, ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
     const contactInfoJson = JSON.stringify({
@@ -89,8 +89,11 @@ export async function POST(request: NextRequest) {
       phone: contactInfo.phone || ''
     });
 
+    // Ensure images is a JSON string, or null if empty
+    const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
+
     await connection.execute(query, [
-      userId, title, content, category, location, price, contactInfoJson
+      userId, title, content, category, location, price, contactInfoJson, imagesJson
     ]);
 
     return NextResponse.json({ message: 'Announcement created successfully' });

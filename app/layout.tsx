@@ -25,11 +25,14 @@ export default async function RootLayout({
 
   const isLoggedIn = !!userSession;
   const userRole = userSession?.role || null;
+  const userFirstName = userSession?.first_name || undefined;
+  const userLastName = userSession?.last_name || undefined;
+  const userAvatarUrl = userSession?.avatar_url || undefined;
 
   return (
     <html lang="en">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <Header isLoggedIn={isLoggedIn} userRole={userRole} /> {/* Pass props to Header */}
+        <Header isLoggedIn={isLoggedIn} userRole={userRole} userFirstName={userFirstName} userLastName={userLastName} userAvatarUrl={userAvatarUrl} /> {/* Pass props to Header */}
         {children}
         <Analytics />
       </body>

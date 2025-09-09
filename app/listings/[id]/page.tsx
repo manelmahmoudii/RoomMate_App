@@ -20,9 +20,11 @@ import {
   Calendar,
   Shield,
   Send,
+  Plus,
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { Label } from "@/components/ui/label"
 
 interface ListingDetail {
   id: string;
@@ -84,6 +86,9 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
   const [user, setUser] = useState<UserSession | null>(null)
   const [isFavorited, setIsFavorited] = useState(false)
   const [message, setMessage] = useState("")
+  const [showRequestModal, setShowRequestModal] = useState(false); // New state for request modal
+  const [requestMessage, setRequestMessage] = useState(""); // New state for request message content
+  const [targetListingId, setTargetListingId] = useState<string | null>(null); // New state to store listing ID for request
 
   const router = useRouter()
   const { id } = params; // Get listing ID from params
@@ -283,6 +288,54 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       alert("An error occurred while sending the message.");
     }
   };
+
+  const openRequestModal = (listingId: string) => {
+    setTargetListingId(listingId);
+    setRequestMessage("");
+    setShowRequestModal(true);
+  };
+
+  const handleSendRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      router.push("/auth/login");
+      return;
+    }
+    if (!targetListingId || !requestMessage.trim()) {
+      alert("Missing listing or request message.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch("/api/student/requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingId: targetListingId,
+          studentId: user.id,
+          message: requestMessage,
+        }),
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        alert("Roommate request sent successfully!");
+        setShowRequestModal(false);
+        setRequestMessage("");
+        // Optionally, refetch requests for student dashboard if user navigates there
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to send request.");
+        console.error("Failed to send request:", response.status, errorData.error);
+      }
+    } catch (error) {
+      console.error("Error sending request:", error);
+      alert("An unexpected error occurred while sending the request.");
+    } finally {
+      setLoading(false);
+    }
+  };
   
   if (loading) {
     return (
@@ -338,18 +391,19 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
             <Card className="overflow-hidden">
               <div className="relative">
                 <img
+                  key={currentImageIndex} // Add key to trigger re-render and animation
                   src={
                     displayedImages[currentImageIndex] ||
                     "/placeholder.svg?height=400&width=800&query=modern apartment room"
                   }
                   alt={listing.title}
-                  className="w-full h-96 object-cover"
+                  className="w-full h-96 object-cover transition-opacity duration-300 ease-in-out animate-fade-in" // Add transition and fade-in
                 />
                 <div className="absolute top-4 right-4 flex gap-2">
-                  <Button size="icon" variant="secondary" className="bg-background/80" onClick={toggleFavorite}>
+                  <Button size="icon" variant="secondary" className="bg-background/80 hover:scale-[1.05] transition-transform duration-200" onClick={toggleFavorite}>
                     <Heart className={`w-4 h-4 ${isFavorited ? "fill-red-500 text-red-500" : ""}`} />
                   </Button>
-                  <Button size="icon" variant="secondary" className="bg-background/80">
+                  <Button size="icon" variant="secondary" className="bg-background/80 hover:scale-[1.05] transition-transform duration-200">
                     <Share2 className="w-4 h-4" />
                   </Button>
                 </div>
@@ -368,7 +422,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                       <button
                         key={index}
                         onClick={() => setCurrentImageIndex(index)}
-                        className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors ${
+                        className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-colors duration-200 ${
                           currentImageIndex === index ? "border-primary" : "border-border"
                         }`}
                       >
@@ -385,7 +439,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
             </Card>
 
             {/* Listing Details */}
-            <Card>
+            <Card className="animate-fade-in">
               <CardContent className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
@@ -423,7 +477,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
 
             {/* Amenities */}
             {displayedAmenities.length > 0 && (
-              <Card>
+              <Card className="animate-fade-in">
                 <CardHeader>
                   <CardTitle className="text-xl">Amenities & Features</CardTitle>
                 </CardHeader>
@@ -441,7 +495,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
             )}
 
             {/* Comments Section */}
-            <Card>
+            <Card className="animate-fade-in">
               <CardHeader>
                 <CardTitle className="text-xl">Comments & Questions</CardTitle>
               </CardHeader>
@@ -455,7 +509,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                       rows={3}
                       className="resize-none"
                     />
-                    <Button onClick={handlePostComment} disabled={!newComment.trim()}>
+                    <Button onClick={handlePostComment} disabled={!newComment.trim()} className="hover:scale-[1.02] transition-transform duration-200">
                       <Send className="w-4 h-4 mr-2" />
                       Post Comment
                     </Button>
@@ -499,7 +553,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Owner Info */}
-            <Card>
+            <Card className="animate-fade-in">
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">
                   <Avatar className="w-16 h-16">
@@ -524,7 +578,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                 <div className="space-y-3">
                   {user && user.id !== listing.owner_id && (
                   <Button
-                    className="w-full bg-primary hover:bg-primary/90"
+                    className="w-full bg-primary hover:bg-primary/90 hover:scale-[1.02] transition-transform duration-200"
                     onClick={() => setShowContactForm(!showContactForm)}
                   >
                     <MessageCircle className="w-4 h-4 mr-2" />
@@ -532,7 +586,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                   </Button>
                   )}
                   {listing.owner_phone && (
-                    <Button variant="outline" className="w-full bg-transparent">
+                    <Button variant="outline" className="w-full bg-transparent hover:scale-[1.02] transition-transform duration-200">
                       <Phone className="w-4 h-4 mr-2" />
                       {listing.owner_phone}
                     </Button>
@@ -543,7 +597,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
 
             {/* Contact Form */}
             {showContactForm && user && user.id !== listing.owner_id && (
-              <Card>
+              <Card className="animate-fade-in">
                 <CardHeader>
                   <CardTitle className="text-lg">Send a Message</CardTitle>
                 </CardHeader>
@@ -556,7 +610,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                     onChange={(e) => setMessage(e.target.value)}
                   />
                   <Button
-                    className="w-full bg-primary hover:bg-primary/90"
+                    className="w-full bg-primary hover:bg-primary/90 hover:scale-[1.02] transition-transform duration-200"
                     onClick={handleSendMessage}
                     disabled={!message.trim()}
                   >
@@ -567,11 +621,24 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
               </Card>
             )}
 
+            {user && user.id !== listing.owner_id && user.role === 'student' && ( // Show send request button if logged in as student and not owner
+              <Card className="animate-fade-in">
+                <CardContent className="p-6 text-center">
+                  <Button
+                    className="w-full bg-secondary hover:bg-secondary/90 hover:scale-[1.02] transition-transform duration-200"
+                    onClick={() => openRequestModal(listing.id)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" /> Send Roommate Request
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {!user && (
-              <Card>
+              <Card className="animate-fade-in">
                 <CardContent className="p-6 text-center">
                   <p className="text-muted-foreground mb-4">Sign in to contact the owner</p>
-                  <Button asChild className="w-full">
+                  <Button asChild className="w-full hover:scale-[1.02] transition-transform duration-200">
                     <Link href="/auth/login">Sign In</Link>
                   </Button>
                 </CardContent>
@@ -580,6 +647,48 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
           </div>
         </div>
       </div>
+
+      {/* Request Modal for Student */}
+      {showRequestModal && user && user.role === 'student' && targetListingId === listing?.id && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-out opacity-0 animate-fade-in-modal">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto transform scale-95 transition-all duration-300 ease-out animate-scale-in-modal">
+            <CardHeader>
+              <CardTitle>Send Roommate Request for {listing?.title}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={handleSendRequest}>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="requestMessage">Your Message</Label>
+                    <Textarea
+                      id="requestMessage"
+                      value={requestMessage}
+                      onChange={(e) => setRequestMessage(e.target.value)}
+                      placeholder="Introduce yourself and explain why you're interested in this listing..."
+                      rows={5}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    variant="outline"
+                    className="flex-1 bg-transparent hover:scale-[1.02] transition-transform duration-200"
+                    onClick={() => setShowRequestModal(false)}
+                    type="button"
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90 hover:scale-[1.02] transition-transform duration-200" disabled={loading || !requestMessage.trim()}>
+                    {loading ? <>Sending...</> : <>Send Request</>}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

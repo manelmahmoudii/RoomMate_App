@@ -28,6 +28,7 @@ interface FormData {
   phone: string
   accountType: string
   location: string
+  avatarFile: File | null; // New field for avatar file
 }
 
 interface FieldErrors {
@@ -61,12 +62,14 @@ export default function SignupPage() {
     phone: "",
     accountType: "",
     location: "",
+    avatarFile: null,
   })
   const [errors, setErrors] = useState<FieldErrors>({})
   const [touched, setTouched] = useState<Record<string, boolean>>({})
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [messageType, setMessageType] = useState<"success" | "error" | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const router = useRouter()
 
   // Validation en temps réel
@@ -138,6 +141,21 @@ export default function SignupPage() {
     return Object.keys(newErrors).length === 0
   }
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setFormData(prev => ({ ...prev, avatarFile: file }));
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setFormData(prev => ({ ...prev, avatarFile: null }));
+      setAvatarPreview(null);
+    }
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -158,23 +176,27 @@ export default function SignupPage() {
     setLoading(true)
 
     try {
+      const formDataToSend = new FormData();
+      formDataToSend.append("firstName", formData.firstName);
+      formDataToSend.append("lastName", formData.lastName);
+      formDataToSend.append("email", formData.email);
+      formDataToSend.append("password", formData.password);
+      formDataToSend.append("userType", userType);
+      formDataToSend.append("university", formData.university);
+      formDataToSend.append("budget", formData.budget);
+      formDataToSend.append("gender", formData.gender);
+      formDataToSend.append("bio", formData.bio);
+      formDataToSend.append("phone", formData.phone);
+      formDataToSend.append("accountType", formData.accountType);
+      formDataToSend.append("location", formData.location);
+      if (formData.avatarFile) {
+        formDataToSend.append("avatar", formData.avatarFile);
+      }
+
       const res = await fetch("/api/signup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          password: formData.password,
-          userType,
-          university: formData.university,
-          budget: formData.budget,
-          gender: formData.gender,
-          bio: formData.bio,
-          phone: formData.phone,
-          accountType: formData.accountType,
-          location: formData.location,
-        }),
+        // No "Content-Type": "application/json" header when sending FormData
+        body: formDataToSend,
       })
 
       const data = await res.json()
@@ -271,6 +293,30 @@ export default function SignupPage() {
                     Student Registration
                   </Badge>
                   <p className="text-xs text-muted-foreground mt-2">Looking for roommates and shared spaces</p>
+                </div>
+
+                {/* Avatar Upload */}
+                <div className="space-y-2 text-center">
+                  <Label htmlFor="avatar" className="text-foreground font-medium">Profile Picture (Optional)</Label>
+                  <div
+                    className="w-32 h-32 rounded-full mx-auto bg-muted flex items-center justify-center border-2 border-dashed border-border cursor-pointer overflow-hidden group hover:border-primary transition-colors"
+                    onClick={() => document.getElementById("avatar-upload-input")?.click()}
+                  >
+                    <input
+                      id="avatar-upload-input"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarChange}
+                    />
+                    {avatarPreview ? (
+                      <img src={avatarPreview} alt="Avatar Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="text-muted-foreground text-sm group-hover:text-primary transition-colors">
+                        Upload Image
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Student Form Fields */}
@@ -420,6 +466,30 @@ export default function SignupPage() {
                     Advertiser Registration
                   </Badge>
                   <p className="text-xs text-muted-foreground mt-2">Posting rooms and shared spaces</p>
+                </div>
+
+                {/* Avatar Upload */}
+                <div className="space-y-2 text-center">
+                  <Label htmlFor="advAvatar" className="text-foreground font-medium">Profile Picture (Optional)</Label>
+                  <div
+                    className="w-32 h-32 rounded-full mx-auto bg-muted flex items-center justify-center border-2 border-dashed border-border cursor-pointer overflow-hidden group hover:border-primary transition-colors"
+                    onClick={() => document.getElementById("adv-avatar-upload-input")?.click()}
+                  >
+                    <input
+                      id="adv-avatar-upload-input"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarChange}
+                    />
+                    {avatarPreview ? (
+                      <img src={avatarPreview} alt="Avatar Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="text-muted-foreground text-sm group-hover:text-primary transition-colors">
+                        Upload Image
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Advertiser Form Fields */}

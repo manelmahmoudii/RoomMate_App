@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { getConnection, initDB } from "@/lib/db";
+import { getConnection } from "@/lib/db"; // Removed initDB from import
 import { revalidatePath } from 'next/cache'; // Import revalidatePath
 
 const SECRET_KEY = process.env.JWT_SECRET || "71553dd0e04e28ad0a85e9b6790afdd8e061f0f0526481f10fce6765a3989b23a0466cffaf0f7ffadd461e4e016a1c50c9c4b76d02764d32ed80711aaf431bfb";
@@ -10,7 +10,7 @@ const SECRET_KEY = process.env.JWT_SECRET || "71553dd0e04e28ad0a85e9b6790afdd8e0
 export async function POST(req: NextRequest) {
   let connection;
   try {
-    await initDB();
+    // await initDB(); // Removed direct call to initDB
     connection = await getConnection();
 
     const { email, password } = await req.json();
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     // Créer un JWT
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.user_type },
+      { id: user.id, email: user.email, role: user.user_type, first_name: user.first_name, last_name: user.last_name, avatar_url: user.avatar_url },
       SECRET_KEY,
       { expiresIn: "2h" }
     );

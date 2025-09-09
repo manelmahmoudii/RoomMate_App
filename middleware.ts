@@ -120,9 +120,14 @@ export async function middleware(request: NextRequest) {
     }
 
     // Student API routes (e.g., for favorites, messages, comments)
-    if (pathname.startsWith("/api/favorites") || pathname.startsWith("/api/messages") || pathname.startsWith("/api/listings") && request.method === "POST" && pathname.endsWith("/comments")) {
-      if (userRole !== "student" && userRole !== "advertiser") { // Advertisers can also comment
-        console.log(`Unauthorized access to student/advertiser API by ${userRole}.`);
+    if (
+      pathname.startsWith("/api/favorites") ||
+      (pathname.startsWith("/api/messages") && request.method === "POST") || // POST /api/messages for sending
+      (pathname.startsWith("/api/messages") && request.method === "GET") ||  // GET /api/messages for fetching
+      (pathname.startsWith("/api/listings") && request.method === "POST" && pathname.endsWith("/comments"))
+    ) {
+      if (userRole !== "student" && userRole !== "advertiser" && userRole !== "admin") { // Admins can also view messages
+        console.log(`Unauthorized access to student/advertiser/admin API by ${userRole}.`);
         return NextResponse.json({ message: "Unauthorized" }, { status: 403 });
       }
     }

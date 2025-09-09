@@ -7,6 +7,9 @@ interface UserSession {
   id: string;
   email: string;
   role: string;
+  avatar_url?: string;
+  first_name?: string;
+  last_name?: string;
 }
 
 export async function getUserSession(request?: NextRequest, tokenString?: string): Promise<UserSession | null> {
@@ -23,12 +26,15 @@ export async function getUserSession(request?: NextRequest, tokenString?: string
       return null;
     }
 
-    const decodedToken = jwt.verify(token, SECRET_KEY) as { id: string; email: string; role: string; exp: number };
+    const decodedToken = jwt.verify(token, SECRET_KEY) as { id: string; email: string; role: string; exp: number, first_name?: string, last_name?: string, avatar_url?: string };
 
     return {
       id: decodedToken.id,
       email: decodedToken.email,
       role: decodedToken.role,
+      avatar_url: decodedToken.avatar_url || undefined, // Include avatar_url if present in token
+      first_name: decodedToken.first_name || undefined,
+      last_name: decodedToken.last_name || undefined,
     };
   } catch (error) {
     console.error('Error in getUserSession:', error);

@@ -27,6 +27,7 @@ import {
   DollarSign,
   BarChart3,
   Upload,
+  Mail
 } from "lucide-react"
 import Link from "next/link"
 
@@ -73,6 +74,24 @@ interface Request {
   listing_title: string;
 }
 
+interface Message {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  listing_id?: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+  sender_first_name: string;
+  sender_last_name: string;
+  sender_avatar_url: string;
+  receiver_first_name: string;
+  receiver_last_name: string;
+  receiver_avatar_url: string;
+  listing_title?: string;
+  listing_city?: string;
+}
+
 interface Analytics {
   totalViews: number;
   totalRequests: number;
@@ -89,9 +108,14 @@ export default function AdvertiserDashboard() {
   const [loading, setLoading] = useState(true);
   const [listings, setListings] = useState<Listing[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]); // New state for messages
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [showEditListing, setShowEditListing] = useState(false);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
+  const [showSendMessageModal, setShowSendMessageModal] = useState(false); // New state for message modal
+  const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null); // New state for message recipient
+  const [messageListingId, setMessageListingId] = useState<string | null>(null); // New state for message listing
+  const [contactMessage, setContactMessage] = useState<string>(""); // New state for message content
   const [newListingForm, setNewListingForm] = useState({
     title: "",
     description: "",
@@ -335,6 +359,23 @@ export default function AdvertiserDashboard() {
     }
   }, []);
 
+  const fetchMessages = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/messages");
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(data);
+      } else {
+        console.error("Failed to fetch messages:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -544,13 +585,52 @@ export default function AdvertiserDashboard() {
     }
   }, [fetchRequests]);
 
-  const handleMessageStudent = useCallback(async (studentId: string, listingId: string) => {
-    // For now, let's just log and alert. In a real app, this would open a chat modal or navigate to a chat page.
-    alert(`Initiating chat with student ID: ${studentId} about listing ID: ${listingId}`);
-    console.log(`Messaging student ${studentId} for listing ${listingId}`);
-    // Implement actual messaging logic here later, potentially navigating to a chat page
-    // router.push(`/dashboard/messages?studentId=${studentId}&listingId=${listingId}`);
+  const handleOpenMessageModal = useCallback((recipientId: string, listingId?: string) => {
+    setMessageRecipientId(recipientId);
+    setMessageListingId(listingId || null);
+    setContactMessage(""); // Clear previous message
+    setShowSendMessageModal(true);
+    setActiveTab("messages"); // Automatically switch to messages tab
   }, []);
+
+  const handleSendMessage = useCallback(async () => {
+    if (!messageRecipientId || !contactMessage.trim()) {
+      alert("Please enter a message and select a recipient.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientId: messageRecipientId,
+          message: contactMessage.trim(),
+          listingId: messageListingId,
+        }),
+      });
+
+      if (response.ok) {
+        alert("Message sent successfully!");
+        setContactMessage("");
+        setShowSendMessageModal(false);
+        fetchMessages(); // Refresh messages after sending
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to send message: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      alert("An error occurred while sending the message.");
+    } finally {
+      setLoading(false);
+    }
+  }, [messageRecipientId, contactMessage, messageListingId, fetchMessages]);
+
+  const handleMessageStudent = useCallback(async (studentId: string, listingId: string) => {
+    handleOpenMessageModal(studentId, listingId); // Use the new modal flow
+  }, [handleOpenMessageModal]);
 
   const handleEditListing = useCallback((listing: Listing) => {
     setEditingListing(listing);
@@ -562,7 +642,8 @@ export default function AdvertiserDashboard() {
     fetchListings();
     fetchRequests();
     fetchAnalytics();
-  }, [fetchAdvertiserProfile, fetchListings, fetchRequests, fetchAnalytics]);
+    fetchMessages(); // Fetch messages on component mount
+  }, [fetchAdvertiserProfile, fetchListings, fetchRequests, fetchAnalytics, fetchMessages]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -634,6 +715,14 @@ export default function AdvertiserDashboard() {
                     Requests
                   </Button>
                   <Button
+                    variant={activeTab === "messages" ? "default" : "ghost"}
+                    className="w-full justify-start"
+                    onClick={() => setActiveTab("messages")}
+                  >
+                    <Mail className="w-4 h-4 mr-3" />
+                    Messages
+                  </Button>
+                  <Button
                     variant={activeTab === "analytics" ? "default" : "ghost"}
                     className="w-full justify-start"
                     onClick={() => setActiveTab("analytics")}
@@ -658,7 +747,7 @@ export default function AdvertiserDashboard() {
           <div className="flex-1">
             {/* Overview Tab */}
             {activeTab === "overview" && (
-              <div className="space-y-6">
+              <div key="overview" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Dashboard Overview</h1>
                   <Button className="bg-primary hover:bg-primary/90" onClick={() => setShowAddListing(true)}>
@@ -669,7 +758,7 @@ export default function AdvertiserDashboard() {
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -681,7 +770,7 @@ export default function AdvertiserDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -693,7 +782,7 @@ export default function AdvertiserDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -707,7 +796,7 @@ export default function AdvertiserDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -719,7 +808,7 @@ export default function AdvertiserDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -731,7 +820,7 @@ export default function AdvertiserDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -769,7 +858,7 @@ export default function AdvertiserDashboard() {
 
             {/* Listings Tab */}
             {activeTab === "listings" && (
-              <div className="space-y-6">
+              <div key="listings" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">My Listings</h1>
                   <Button className="bg-primary hover:bg-primary/90" onClick={() => setShowAddListing(true)}>
@@ -780,7 +869,7 @@ export default function AdvertiserDashboard() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {listings.map((listing) => (
-                    <Card key={listing.id} className="group hover:shadow-lg transition-shadow">
+                    <Card key={listing.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
                       <div className="relative">
                         <img
                           src={getListingImageUrl(listing.images)} // Assuming images is an array
@@ -844,7 +933,7 @@ export default function AdvertiserDashboard() {
 
             {/* Requests Tab */}
             {activeTab === "requests" && (
-              <div className="space-y-6">
+              <div key="requests" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Student Requests</h1>
                   <Badge variant="secondary">{requests.length} total requests</Badge>
@@ -906,9 +995,89 @@ export default function AdvertiserDashboard() {
                                 <MessageCircle className="w-4 h-4 mr-2" />
                                 Message
                               </Button>
+                              <Link href={`/student/${request.student_id}`}>
                               <Button variant="outline" size="sm">
                                 View Profile
                               </Button>
+                              </Link>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Messages Tab (updated) */}
+            {activeTab === "messages" && (
+              <div key="messages" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-3xl font-bold text-foreground">My Messages</h1>
+                  <Badge variant="secondary">{messages.length} total messages</Badge>
+                </div>
+
+                {/* Message Composer / Reply Section */}
+                {messageRecipientId && ( // Show composer if a recipient is selected
+                  <Card className="mb-6">
+                    <CardHeader>
+                      <CardTitle>New Message / Reply</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div>
+                        <Label htmlFor="messageContent">Message to {messages.find(m => m.sender_id === messageRecipientId || m.receiver_id === messageRecipientId)?.sender_first_name || "User"}:</Label>
+                        <Textarea
+                          id="messageContent"
+                          placeholder="Type your message here..."
+                          rows={4}
+                          value={contactMessage}
+                          onChange={(e) => setContactMessage(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setShowSendMessageModal(false)}>
+                          Cancel
+                        </Button>
+                        <Button onClick={handleSendMessage} disabled={loading || !contactMessage.trim()}>
+                          {loading ? "Sending..." : "Send Message"}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <div className="space-y-4">
+                  {loading && <p>Loading messages...</p>}
+                  {!loading && messages.length === 0 && <p className="text-muted-foreground">No messages found.</p>}
+                  {!loading && messages.map((message) => (
+                    <Card key={message.id}>
+                      <CardContent className="p-6">
+                        <div className="flex items-start gap-4">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={message.sender_avatar_url || "/placeholder.svg"} />
+                            <AvatarFallback>
+                              {message.sender_first_name?.[0]}{message.sender_last_name?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-semibold text-foreground">{message.sender_first_name} {message.sender_last_name}</h3>
+                              <span className="text-xs text-muted-foreground">{new Date(message.created_at).toLocaleString()}</span>
+                            </div>
+                            {message.listing_title && (
+                              <p className="text-sm text-muted-foreground mb-2">Regarding: <Link href={`/listings/${message.listing_id}`} className="text-primary hover:underline">{message.listing_title} ({message.listing_city})</Link></p>
+                            )}
+                            <p className="text-sm text-foreground mb-4">{message.content}</p>
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="outline" onClick={() => handleOpenMessageModal(message.sender_id, message.listing_id)}>
+                                Reply
+                              </Button>
+                              {!message.is_read && (
+                                <Button size="sm" variant="secondary">
+                                  Mark as Read
+                                </Button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -921,7 +1090,7 @@ export default function AdvertiserDashboard() {
 
             {/* Analytics Tab */}
             {activeTab === "analytics" && (
-              <div className="space-y-6">
+              <div key="analytics" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <h1 className="text-3xl font-bold text-foreground">Analytics & Performance</h1>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -977,7 +1146,7 @@ export default function AdvertiserDashboard() {
 
             {/* Profile Settings Tab */}
             {activeTab === "profile" && (
-              <div className="space-y-6">
+              <div key="profile" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <h1 className="text-3xl font-bold text-foreground">Profile Settings</h1>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1085,8 +1254,8 @@ export default function AdvertiserDashboard() {
 
       {/* Add Listing Modal */}
       {showAddListing && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-out opacity-0 animate-fade-in-modal">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto transform scale-95 transition-all duration-300 ease-out animate-scale-in-modal">
             <CardHeader>
               <CardTitle>Add New Listing</CardTitle>
             </CardHeader>
@@ -1209,8 +1378,8 @@ export default function AdvertiserDashboard() {
 
       {/* Edit Listing Modal */}
       {showEditListing && editingListing && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-out opacity-0 animate-fade-in-modal">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto transform scale-95 transition-all duration-300 ease-out animate-scale-in-modal">
             <CardHeader>
               <CardTitle>Edit Listing</CardTitle>
             </CardHeader>

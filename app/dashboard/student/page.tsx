@@ -26,6 +26,7 @@ import {
   Eye,
   Trash2,
   Filter,
+  Plus,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -341,6 +342,26 @@ export default function StudentDashboard() {
     }
   };
 
+  const getParsedAmenities = (amenitiesInput: string | string[] | null) => {
+    if (!amenitiesInput) return [];
+
+    // If it's already an array, return it directly
+    if (Array.isArray(amenitiesInput)) {
+      return amenitiesInput;
+    }
+
+    // Convert to string defensively before any string operations
+    const amenitiesString = String(amenitiesInput);
+
+    try {
+      const amenities = JSON.parse(amenitiesString);
+      return Array.isArray(amenities) ? amenities : [];
+    } catch (e) {
+      console.error("Error parsing amenities JSON string:", amenitiesString, e);
+      return [];
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -412,7 +433,7 @@ export default function StudentDashboard() {
           <div className="flex-1">
             {/* Overview Tab */}
             {activeTab === "overview" && (
-              <div className="space-y-6">
+              <div key="overview" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Dashboard Overview</h1>
                   <Button className="bg-primary hover:bg-primary/90" asChild>
@@ -425,7 +446,7 @@ export default function StudentDashboard() {
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -437,7 +458,7 @@ export default function StudentDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -449,7 +470,7 @@ export default function StudentDashboard() {
                     </CardContent>
                   </Card>
 
-                  <Card>
+                  <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
                       <div className="flex items-center justify-between">
                         <div>
@@ -509,7 +530,7 @@ export default function StudentDashboard() {
 
             {/* Saved Listings Tab */}
             {activeTab === "saved" && (
-              <div className="space-y-6">
+              <div key="saved" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Saved Listings</h1>
                   <div className="flex items-center gap-2">
@@ -523,7 +544,7 @@ export default function StudentDashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {loading && <p>Loading saved listings...</p>}
                   {!loading && savedListings.length > 0 ? (savedListings.map((listing) => (
-                    <Card key={listing.listing_id} className="group hover:shadow-lg transition-shadow">
+                    <Card key={listing.listing_id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
                       <div className="relative">
                         <img
                           src={getListingImageUrl(listing.images)}
@@ -555,7 +576,7 @@ export default function StudentDashboard() {
                           <span className="text-sm">{listing.number_of_roommates} Roommate(s)</span>
                         </div>
                         <div className="flex flex-wrap gap-1 mb-2">
-                          {listing.amenities && JSON.parse(listing.amenities).map((amenity: string, index: number) => (
+                          {getParsedAmenities(listing.amenities).map((amenity: string, index: number) => (
                             <Badge key={index} variant="secondary" className="text-xs">
                               {amenity}
                             </Badge>
@@ -573,8 +594,8 @@ export default function StudentDashboard() {
                           <Button className="flex-1 bg-primary hover:bg-primary/90" asChild>
                             <Link href={`/listings/${listing.listing_id}`}>View Details</Link>
                           </Button>
-                          <Button variant="outline" size="icon" onClick={() => handleToggleFavorite(listing.listing_id)}>
-                            <Trash2 className="w-4 h-4" />
+                          <Button variant="outline" size="sm" onClick={() => openRequestModalForNew(listing.listing_id)}>
+                            <Plus className="w-4 h-4 mr-2" /> Send Request
                           </Button>
                         </div>
                       </CardContent>
@@ -592,7 +613,7 @@ export default function StudentDashboard() {
                           <h2 className="text-2xl font-bold text-foreground mb-6">Recommended Listings</h2>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {allListings.map((listing) => (
-                              <Card key={listing.listing_id} className="group hover:shadow-lg transition-shadow">
+                              <Card key={listing.listing_id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
                                 <div className="relative">
                                   <img
                                     src={getListingImageUrl(listing.images)}
@@ -624,7 +645,7 @@ export default function StudentDashboard() {
                                     <span className="text-sm">{listing.number_of_roommates} Roommate(s)</span>
                                   </div>
                                   <div className="flex flex-wrap gap-1 mb-2">
-                                    {listing.amenities && JSON.parse(listing.amenities).map((amenity: string, index: number) => (
+                                    {getParsedAmenities(listing.amenities).map((amenity: string, index: number) => (
                                       <Badge key={index} variant="secondary" className="text-xs">
                                         {amenity}
                                       </Badge>
@@ -641,8 +662,8 @@ export default function StudentDashboard() {
                                     <Button className="flex-1 bg-primary hover:bg-primary/90" asChild>
                                       <Link href={`/listings/${listing.listing_id}`}>View Details</Link>
                                     </Button>
-                                    <Button variant="outline" size="icon" onClick={() => handleToggleFavorite(listing.listing_id)}>
-                                      <Heart className={`w-4 h-4 ${savedListings.some(sl => sl.listing_id === listing.listing_id) ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
+                                    <Button variant="outline" size="sm" onClick={() => openRequestModalForNew(listing.listing_id)}>
+                                      <Plus className="w-4 h-4 mr-2" /> Send Request
                                     </Button>
                                   </div>
                                 </CardContent>
@@ -659,7 +680,7 @@ export default function StudentDashboard() {
 
             {/* Requests Tab */}
             {activeTab === "requests" && (
-              <div className="space-y-6">
+              <div key="requests" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">My Requests</h1>
                   <Badge variant="secondary">{sentRequests.length} total requests</Badge>
@@ -716,7 +737,7 @@ export default function StudentDashboard() {
 
             {/* Profile Settings Tab */}
             {activeTab === "profile" && (
-              <div className="space-y-6">
+              <div key="profile" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">Profile Settings</h1>
                   <Button variant="outline" onClick={() => setEditingProfile(!editingProfile)}>
@@ -923,8 +944,8 @@ export default function StudentDashboard() {
 
       {/* Request Modal */}
       {showRequestModal && (targetListingId || editingRequest) && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-out opacity-0 animate-fade-in-modal">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto transform scale-95 transition-all duration-300 ease-out animate-scale-in-modal">
             <CardHeader>
               <CardTitle>{editingRequest ? "Edit Roommate Request" : "Send Roommate Request"}</CardTitle>
             </CardHeader>
@@ -980,8 +1001,8 @@ export default function StudentDashboard() {
 
       {/* Message Modal */}
       {showMessageModal && messageRecipientId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-out opacity-0 animate-fade-in-modal">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto transform scale-95 transition-all duration-300 ease-out animate-scale-in-modal">
             <CardHeader>
               <CardTitle>Send Message</CardTitle>
             </CardHeader>
