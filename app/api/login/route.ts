@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { getConnection, initDB } from "@/lib/db";
+import { revalidatePath } from 'next/cache'; // Import revalidatePath
 
 const SECRET_KEY = process.env.JWT_SECRET || "71553dd0e04e28ad0a85e9b6790afdd8e061f0f0526481f10fce6765a3989b23a0466cffaf0f7ffadd461e4e016a1c50c9c4b76d02764d32ed80711aaf431bfb";
 
@@ -51,6 +52,8 @@ export async function POST(req: NextRequest) {
       path: "/",
       maxAge: 2 * 60 * 60, // 2h
     });
+
+    revalidatePath('/'); // Revalidate the root path to ensure Header updates
 
     return response;
   } catch (error) {

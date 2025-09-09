@@ -86,15 +86,14 @@ export default function LoginPage() {
         return
       }
 
-      // Store user data and remember me preference
-      if (rememberMe) {
-        localStorage.setItem("user", JSON.stringify(data.user))
-        localStorage.setItem("rememberMe", "true")
-        localStorage.setItem("token", data.token || data.accessToken)
-      } else {
-        sessionStorage.setItem("user", JSON.stringify(data.user))
-        sessionStorage.setItem("token", data.token || data.accessToken)
-      }
+      // No longer storing token/user in localStorage/sessionStorage as auth is cookie-based
+      // and session is fetched server-side.
+      // Clean up any old entries just in case.
+      localStorage.removeItem("user");
+      localStorage.removeItem("rememberMe");
+      localStorage.removeItem("token");
+      sessionStorage.removeItem("user");
+      sessionStorage.removeItem("token");
 
       // Redirect based on actual user role from API response
       // Use the role from the response instead of the selected tab
@@ -111,6 +110,7 @@ export default function LoginPage() {
 
       console.log(`Redirecting ${userRole} to: ${redirectPath}`)
       router.push(redirectPath)
+      router.refresh(); // <--- Moved this line to after router.push()
 
     } catch (error) {
       console.error("Login error:", error)

@@ -1,32 +1,37 @@
 import { NextRequest } from 'next/server';
-import { jwtDecode } from "jwt-decode";
-// No longer importing Cookies from 'js-cookie' here, as this is a server-side utility.
+import jwt from 'jsonwebtoken';
 
-interface DecodedToken {
+const SECRET_KEY = process.env.JWT_SECRET || 'supersecretjwtkey';
+
+interface UserSession {
   id: string;
   email: string;
   role: string;
-  iat: number;
-  exp: number;
 }
 
-export async function getUserSession(request: NextRequest): Promise<DecodedToken | null> {
-  // This utility is intended for server-side use only. NextRequest is always available.
-  const token = request.cookies.get('token')?.value;
-
-  if (!token) {
-    return null;
-  }
-
+export async function getUserSession(request?: NextRequest, tokenString?: string): Promise<UserSession | null> {
   try {
-    const decodedToken = jwtDecode<DecodedToken>(token);
-    if (decodedToken.exp * 1000 < Date.now()) {
-      console.log("Token expired in lib/auth.ts");
+    let token: string | undefined;
+
+    if (tokenString) {
+      token = tokenString;
+    } else if (request) {
+      token = request.cookies.get('token')?.value;
+    }
+
+    if (!token) {
       return null;
     }
-    return decodedToken;
+
+    const decodedToken = jwt.verify(token, SECRET_KEY) as { id: string; email: string; role: string; exp: number };
+
+    return {
+      id: decodedToken.id,
+      email: decodedToken.email,
+      role: decodedToken.role,
+    };
   } catch (error) {
-    console.error("Error decoding or verifying token in lib/auth.ts:", error);
+    console.error('Error in getUserSession:', error);
     return null;
   }
 }

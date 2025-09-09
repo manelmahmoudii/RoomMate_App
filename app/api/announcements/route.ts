@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getConnection } from '@/lib/db'
+import { getUserSession } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   let connection;
@@ -55,35 +56,43 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let connection;
   try {
+    const userSession = await getUserSession(request);
+
+    if (!userSession || !userSession.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userId = userSession.id;
+
     connection = await getConnection();
     const body = await request.json();
-    
-    const { userId, title, content, category, location, price, contactInfo } = body;
-    
+
+    const { title, content, category, location, price, contactInfo } = body;
+
     // Validation basique
-    if (!userId || !title || !content || !category) {
+    if (!title || !content || !category) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
-    
+
     const query = `
       INSERT INTO announcements 
         (id, user_id, title, content, category, city, price, contact_info, created_at)
       VALUES 
         (UUID(), ?, ?, ?, ?, ?, ?, ?, NOW())
     `;
-    
+
     const contactInfoJson = JSON.stringify({
       email: contactInfo.email || '',
       phone: contactInfo.phone || ''
     });
-    
+
     await connection.execute(query, [
       userId, title, content, category, location, price, contactInfoJson
     ]);
-    
+
     return NextResponse.json({ message: 'Announcement created successfully' });
   } catch (error) {
     console.error('Error creating announcement:', error);

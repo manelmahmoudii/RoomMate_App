@@ -5,8 +5,7 @@ import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import Header from './header/page' // Import Header
 import { getUserSession } from '@/lib/auth' // Import auth utility
-import { headers } from 'next/headers' // Import headers for server-side cookie access
-import { NextRequest } from 'next/server' // Import NextRequest for getUserSession
+import { cookies } from 'next/headers' // Import cookies for server-side cookie access
 
 export const metadata: Metadata = {
   title: 'RoomMate App',
@@ -19,21 +18,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const headersList = headers();
-  const cookieHeader = headersList.get('cookie');
-  
-  // Create a mock NextRequest object to pass to getUserSession
-  // This is a workaround since `headers()` doesn't directly provide NextRequest
-  const mockRequest = {
-    cookies: {
-      get: (name: string) => {
-        const cookie = cookieHeader?.split(';').find(c => c.trim().startsWith(name + '='));
-        return cookie ? { value: cookie.trim().substring(name.length + 1) } : undefined;
-      }
-    }
-  } as unknown as NextRequest; // Cast to NextRequest
+  const cookieStore = cookies();
+  const token = cookieStore.get('token')?.value;
 
-  const userSession = await getUserSession(mockRequest);
+  const userSession = await getUserSession(undefined, token);
 
   const isLoggedIn = !!userSession;
   const userRole = userSession?.role || null;
