@@ -3,9 +3,9 @@ import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
-import Header from './header/page' // Import Header
 import { getUserSession } from '@/lib/auth' // Import auth utility
 import { cookies } from 'next/headers' // Import cookies for server-side cookie access
+import HeaderClientWrapper from '@/app/components/HeaderClientWrapper'; // Import the new client wrapper
 
 export const metadata: Metadata = {
   title: 'RoomMate App',
@@ -32,7 +32,13 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <Header isLoggedIn={isLoggedIn} userRole={userRole} userFirstName={userFirstName} userLastName={userLastName} userAvatarUrl={userAvatarUrl} /> {/* Pass props to Header */}
+        <HeaderClientWrapper 
+          isLoggedIn={isLoggedIn} 
+          userRole={userRole} 
+          userFirstName={userFirstName} 
+          userLastName={userLastName} 
+          userAvatarUrl={userAvatarUrl} 
+        /> {/* Use the client wrapper */}
         {children}
         <Analytics />
       </body>

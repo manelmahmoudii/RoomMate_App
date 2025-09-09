@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (error) {
-    console.error(error);
+    console.error("Login API error:", error); // Enhanced logging
     return NextResponse.json({ error: "Une erreur est survenue" }, { status: 500 });
   } finally {
     if (connection) {

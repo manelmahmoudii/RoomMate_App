@@ -79,6 +79,17 @@ interface SentRequest {
   owner_id: string; // Added owner_id
 }
 
+interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  city: string | null;
+  price: number | null;
+  images: string | null;
+  created_at: string;
+}
+
 export default function StudentDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
   const [editingProfile, setEditingProfile] = useState(false)
@@ -95,6 +106,7 @@ export default function StudentDashboard() {
   const [contactMessage, setContactMessage] = useState("");
   const [messageListingId, setMessageListingId] = useState<string | null>(null);
   const [allListings, setAllListings] = useState<SavedListing[]>([]); // New state for all listings
+  const [myAnnouncements, setMyAnnouncements] = useState<Announcement[]>([]); // New state for student's announcements
 
   const fetchStudentProfile = useCallback(async () => {
     setLoading(true);
@@ -164,6 +176,48 @@ export default function StudentDashboard() {
       setLoading(false);
     }
   }, []);
+
+  const fetchMyAnnouncements = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/announcements/my");
+      if (response.ok) {
+        const data = await response.json();
+        setMyAnnouncements(data);
+      } else {
+        console.error("Failed to fetch my announcements:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching my announcements:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleDeleteAnnouncement = useCallback(async (announcementId: string) => {
+    if (!window.confirm("Are you sure you want to delete this announcement?")) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/announcements/${announcementId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        alert("Announcement deleted successfully!");
+        fetchMyAnnouncements(); // Refresh the list
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || "Failed to delete announcement.");
+        console.error("Failed to delete announcement:", response.status, errorData.error);
+      }
+    } catch (error) {
+      alert("Error deleting announcement.");
+      console.error("Error deleting announcement:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchMyAnnouncements]);
 
   const handleToggleFavorite = useCallback(async (listingId: string) => {
     try {
@@ -300,7 +354,8 @@ export default function StudentDashboard() {
     fetchSavedListings();
     fetchSentRequests();
     fetchAllListings(); // Fetch all listings on mount
-  }, [fetchStudentProfile, fetchSavedListings, fetchSentRequests, fetchAllListings]);
+    fetchMyAnnouncements(); // Fetch my announcements on mount
+  }, [fetchStudentProfile, fetchSavedListings, fetchSentRequests, fetchAllListings, fetchMyAnnouncements]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -417,6 +472,14 @@ export default function StudentDashboard() {
                     My Requests
                   </Button>
                   <Button
+                    variant={activeTab === "my-announcements" ? "default" : "ghost"} // New tab for My Announcements
+                    className="w-full justify-start"
+                    onClick={() => setActiveTab("my-announcements")}
+                  >
+                    <Bell className="w-4 h-4 mr-3" />
+                    My Announcements
+                  </Button>
+                  <Button
                     variant={activeTab === "profile" ? "default" : "ghost"}
                     className="w-full justify-start"
                     onClick={() => setActiveTab("profile")}
@@ -522,6 +585,18 @@ export default function StudentDashboard() {
                           </div>
                         </div>
                       ))}
+                      {!loading && myAnnouncements.slice(0, 3).map((announcement, index) => (
+                        <div key={`announcement-${index}`} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                          <Bell className="w-5 h-5 text-purple-500" /> {/* Using Bell icon for announcements */}
+                          <div>
+                            <p className="text-sm text-foreground">Posted announcement: {announcement.title}</p>
+                            <p className="text-xs text-muted-foreground">{new Date(announcement.created_at).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {!loading && sentRequests.length === 0 && myAnnouncements.length === 0 && (
+                        <p className="text-muted-foreground">No recent activity.</p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -672,6 +747,69 @@ export default function StudentDashboard() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* My Announcements Tab */}
+            {activeTab === "my-announcements" && (
+              <div key="my-announcements" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-3xl font-bold text-foreground">My Announcements</h1>
+                  <Button className="bg-primary hover:bg-primary/90" asChild>
+                    <Link href="/announcements">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create New Announcement
+                    </Link>
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {loading && <p>Loading your announcements...</p>}
+                  {!loading && myAnnouncements.length > 0 ? (
+                    myAnnouncements.map((announcement) => {
+                      const images = getListingImageUrl(announcement.images || "[]"); // Reusing getListingImageUrl for consistency
+                      return (
+                        <Card key={announcement.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
+                          <div className="relative">
+                            {images !== "/placeholder.svg" && (
+                              <img
+                                src={images}
+                                alt={announcement.title}
+                                className="w-full h-48 object-cover rounded-t-lg"
+                              />
+                            )}
+                          </div>
+                          <CardContent className="p-4">
+                            <h3 className="font-semibold text-foreground mb-2">{announcement.title}</h3>
+                            <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{announcement.content}</p>
+                            <Badge variant="secondary" className="mb-3">{announcement.category}</Badge>
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>Posted: {new Date(announcement.created_at).toLocaleDateString()}</span>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeleteAnnouncement(announcement.id)}
+                                className="hover:scale-105 transition-transform duration-200"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })
+                  ) : (
+                    <div className="col-span-full text-center py-12">
+                      <Bell className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-foreground mb-2">No announcements posted yet</h3>
+                      <p className="text-muted-foreground mb-4">Create an announcement to share with the community!</p>
+                      <Button asChild className="bg-primary hover:bg-primary/90">
+                        <Link href="/announcements"><Plus className="w-4 h-4 mr-2" /> Post Announcement</Link>
+                      </Button>
                     </div>
                   )}
                 </div>
