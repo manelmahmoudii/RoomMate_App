@@ -52,6 +52,24 @@ interface User {
   user_type?: string;
 }
 
+interface Message {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  listing_id?: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+  sender_first_name: string;
+  sender_last_name: string;
+  sender_avatar_url: string;
+  receiver_first_name: string;
+  receiver_last_name: string;
+  receiver_avatar_url: string;
+  listing_title?: string;
+  listing_city?: string;
+}
+
 export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,6 +90,10 @@ export default function AnnouncementsPage() {
     imageFile: null as File | null, // Corrected type and initial value
     imagePreview: null as string | null, // Corrected type and initial value
   })
+  const [showSendMessageModal, setShowSendMessageModal] = useState(false); // New state for message modal
+  const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null); // New state for message recipient
+  const [messageAnnouncementId, setMessageAnnouncementId] = useState<string | null>(null); // Link to announcement
+  const [contactMessage, setContactMessage] = useState<string>(""); // New state for message content
 
   const categories = [
     { value: "roommate", label: "Roommate Search", icon: Users },
@@ -200,6 +222,47 @@ export default function AnnouncementsPage() {
       setLoading(false);
     }
   }
+
+  const handleOpenMessageModal = (recipientId: string, announcementId?: string) => {
+    setMessageRecipientId(recipientId);
+    setMessageAnnouncementId(announcementId || null);
+    setContactMessage(""); // Clear previous message
+    setShowSendMessageModal(true);
+  };
+
+  const handleSendMessage = async () => {
+    if (!messageRecipientId || !contactMessage.trim()) {
+      alert("Please enter a message and select a recipient.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientId: messageRecipientId,
+          message: contactMessage.trim(),
+          announcementId: messageAnnouncementId, // Link message to announcement
+        }),
+      });
+
+      if (response.ok) {
+        alert("Message sent successfully!");
+        setContactMessage("");
+        setShowSendMessageModal(false);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to send message: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      alert("An error occurred while sending the message.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredAnnouncements = announcements.filter((announcement) => {
     const matchesSearch =
@@ -363,7 +426,13 @@ export default function AnnouncementsPage() {
                         </div>
                       </div>
 
-                      {contactInfo.email && (
+                      {user && user.id !== announcement.user_id && (
+                        <Button size="sm" onClick={() => handleOpenMessageModal(announcement.user_id, announcement.id)}>
+                          <MessageCircle className="w-3 h-3 mr-1" />
+                          Message Owner
+                        </Button>
+                      )}
+                      {!user && contactInfo.email && (
                         <Button size="sm" variant="outline" asChild>
                           <a href={`mailto:${contactInfo.email}`}>
                             <MessageCircle className="w-3 h-3 mr-1" />
@@ -517,6 +586,37 @@ export default function AnnouncementsPage() {
                   </Button>
                 </div>
               </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Message Owner Modal */}
+      {showSendMessageModal && messageRecipientId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-out opacity-0 animate-fade-in-modal">
+          <Card className="w-full max-w-xl max-h-[90vh] overflow-y-auto transform scale-95 transition-all duration-300 ease-out animate-scale-in-modal">
+            <CardHeader>
+              <CardTitle>Send Message</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="messageContent">Your Message</Label>
+                <Textarea
+                  id="messageContent"
+                  placeholder="Type your message here..."
+                  rows={5}
+                  value={contactMessage}
+                  onChange={(e) => setContactMessage(e.target.value)}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowSendMessageModal(false)} type="button">
+                  Cancel
+                </Button>
+                <Button onClick={handleSendMessage} disabled={loading || !contactMessage.trim()}>
+                  {loading ? "Sending..." : "Send Message"}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

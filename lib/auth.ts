@@ -1,43 +1,56 @@
-import { NextRequest } from 'next/server';
-import jwt from 'jsonwebtoken';
+import { SignJWT, jwtVerify, JWTPayload } from 'jose';
+import { cookies } from 'next/headers';
+import { UserSession } from '@/lib/types';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'supersecretjwtkey';
+const SECRET_KEY = process.env.JWT_SECRET || 'fallback_secret_key';
+const KEY = new TextEncoder().encode(SECRET_KEY);
 
-interface UserSession {
-  id: string;
-  email: string;
-  role: string;
-  avatar_url?: string;
-  first_name?: string;
-  last_name?: string;
+export async function encrypt(payload: UserSession) {
+  return new SignJWT(payload as JWTPayload)
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('7d') // Token expires in 7 days
+    .sign(KEY);
 }
 
-export async function getUserSession(request?: NextRequest, tokenString?: string): Promise<UserSession | null> {
+export async function decrypt(session: string | undefined = '') {
   try {
-    let token: string | undefined;
-
-    if (tokenString) {
-      token = tokenString;
-    } else if (request) {
-      token = request.cookies.get('token')?.value;
-    }
-
-    if (!token) {
-      return null;
-    }
-
-    const decodedToken = jwt.verify(token, SECRET_KEY) as { id: string; email: string; role: string; exp: number, first_name?: string, last_name?: string, avatar_url?: string };
-
-    return {
-      id: decodedToken.id,
-      email: decodedToken.email,
-      role: decodedToken.role,
-      avatar_url: decodedToken.avatar_url || undefined, // Include avatar_url if present in token
-      first_name: decodedToken.first_name || undefined,
-      last_name: decodedToken.last_name || undefined,
-    };
+    const { payload } = await jwtVerify(session, KEY, {
+      algorithms: ['HS256'],
+    });
+    return payload as unknown as UserSession; // Explicitly cast to unknown first
   } catch (error) {
-    console.error('Error in getUserSession:', error);
+    console.error('Failed to decrypt session:', error);
     return null;
   }
+}
+
+export async function getUserSession(req?: Request, token?: string): Promise<UserSession | null> {
+  let sessionToken = token;
+
+  if (!sessionToken && req) {
+    const cookieHeader = req.headers.get('cookie');
+    const cookie = cookieHeader?.split('; ').find(row => row.startsWith('token='));
+    sessionToken = cookie?.split('=')[1];
+  } else if (!sessionToken) {
+    const cookieStore = cookies();
+    sessionToken = cookieStore.get('token')?.value;
+  }
+
+  if (!sessionToken) {
+    return null;
+  }
+
+  try {
+    const decoded = await decrypt(sessionToken);
+    return decoded;
+  } catch (error) {
+    console.error('Error getting user session:', error);
+    return null;
+  }
+}
+
+// This function can only be called from a Server Component or API Route
+export async function serverLogout() {
+  cookies().delete('token');
 }

@@ -1,9 +1,14 @@
-// app/api/auth/logout/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { serverLogout } from "@/lib/auth";
+import { revalidatePath } from 'next/cache';
 
-export async function POST() {
-  const response = NextResponse.redirect(new URL("/", process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000/auth/login"));
-  // Supprime le cookie "token"
-  response.cookies.delete("token");
-  return response;
+export async function POST(request: NextRequest) {
+  try {
+    await serverLogout();
+    revalidatePath('/'); // Revalidate the root path to update header state
+    return NextResponse.json({ message: "Logout successful" });
+  } catch (error) {
+    console.error("Error during server logout:", error);
+    return NextResponse.json({ error: "Failed to logout" }, { status: 500 });
+  }
 }

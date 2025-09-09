@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Users, Building, Shield, Eye, EyeOff, ArrowLeft, Loader2, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { fetchWithAuth } from "@/lib/fetchWithAuth"; // Import fetchWithAuth
 
 interface LoginErrors {
   email?: string
@@ -72,51 +73,39 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const res = await fetch("/api/login", {
+      const response = await fetchWithAuth(router, "/api/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, userType })
       })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        setErrors({ general: data.error || "An error occurred" })
-        setLoading(false)
-        return
+      if (response.ok) {
+        // Login successful, redirect to dashboard or home
+        const userSession = await response.json();
+        // Determine redirect path based on user role
+        let redirectPath = "/";
+        if (userSession.role === "admin") {
+          redirectPath = "/dashboard/admin";
+        } else if (userSession.role === "advertiser") {
+          redirectPath = "/dashboard/advertiser";
+        } else if (userSession.role === "student") {
+          redirectPath = "/dashboard/student";
+        }
+        router.push(redirectPath);
+        router.refresh(); // Important for updating server components like Header
+      } else {
+        const errorData = await response.json();
+        setErrors({ general: errorData.error || "Failed to login" });
       }
-
-      // No longer storing token/user in localStorage/sessionStorage as auth is cookie-based
-      // and session is fetched server-side.
-      // Clean up any old entries just in case.
-      localStorage.removeItem("user");
-      localStorage.removeItem("rememberMe");
-      localStorage.removeItem("token");
-      sessionStorage.removeItem("user");
-      sessionStorage.removeItem("token");
-
-      // Redirect based on actual user role from API response
-      // Use the role from the response instead of the selected tab
-      const userRole = data.user?.role || data.user?.userType || userType
-      
-      let redirectPath = "/"
-      if (userRole === "admin" || userRole === "administrator") {
-        redirectPath = "/dashboard/admin/"
-      } else if (userRole === "advertiser" || userRole === "property_owner" || userRole === "agency") {
-        redirectPath = "/dashboard/advertiser"
-      } else if (userRole === "student") {
-        redirectPath = "/dashboard/student"
+    } catch (error: any) {
+      if (error.message === "Unauthorized") {
+        // This error is thrown by fetchWithAuth when a 401 occurs
+        // The redirection is already handled, so we just stop further processing
+        return;
       }
-
-      console.log(`Redirecting ${userRole} to: ${redirectPath}`)
-      router.push(redirectPath)
-      router.refresh(); // <--- Moved this line to after router.push()
-
-    } catch (error) {
-      console.error("Login error:", error)
-      setErrors({ general: "An error occurred during login. Please try again." })
+      setErrors({ general: error.message || "Une erreur est survenue" });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 

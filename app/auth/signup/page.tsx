@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Users, Building, Eye, EyeOff, ArrowLeft, CheckCircle, Mail, Loader2, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { fetchWithAuth } from "@/lib/fetchWithAuth"; // Import fetchWithAuth
 
 // Types pour les données du formulaire
 interface FormData {
@@ -193,7 +194,7 @@ export default function SignupPage() {
         formDataToSend.append("avatar", formData.avatarFile);
       }
 
-      const res = await fetch("/api/signup", {
+      const res = await fetchWithAuth(router, "/api/signup", {
         method: "POST",
         // No "Content-Type": "application/json" header when sending FormData
         body: formDataToSend,
@@ -211,7 +212,12 @@ export default function SignupPage() {
         setMessage(data.error || "Signup failed")
         setMessageType("error")
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message === "Unauthorized") {
+        // This error is thrown by fetchWithAuth when a 401 occurs
+        // The redirection is already handled, so we just stop further processing
+        return;
+      }
       console.error(error)
       setMessage("An error occurred during signup")
       setMessageType("error")
