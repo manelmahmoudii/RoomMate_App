@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea" // Correctly import Textarea
-import { toast } from 'react-hot-toast'; // Import toast
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from 'react-hot-toast';
 import {
   Users,
   Home,
@@ -35,7 +35,6 @@ import {
   ArrowLeft
 } from "lucide-react"
 import Link from "next/link"
-// Removed: import Header from "../../header/page"
 
 interface User {
   id: string;
@@ -43,9 +42,9 @@ interface User {
   first_name: string;
   last_name: string;
   user_type: string;
-  avatar_url: string;
+  avatar_url: string | null;
   created_at: string;
-  status: 'active' | 'suspended'; // Add status to User interface
+  status: 'active' | 'suspended';
 }
 
 interface Listing {
@@ -66,7 +65,7 @@ interface Report {
   listing_id: string;
   student_id: string;
   message: string;
-  status: 'pending' | 'resolved' | 'rejected'; // Add status to Report interface
+  status: 'pending' | 'resolved' | 'rejected';
   created_at: string;
   student_first_name: string;
   last_name: string;
@@ -87,7 +86,7 @@ interface Announcement {
   last_name: string;
   university: string | null;
   avatar_url: string | null;
-  images: string | null; // Added images field (JSON string or null)
+  images: string | null;
 }
 
 interface Message {
@@ -101,7 +100,7 @@ interface Message {
   created_at: string;
   sender_first_name: string;
   sender_last_name: string;
-  sender_avatar_url: string;
+  sender_avatar_url: string | null;
   listing_title: string | null;
   listing_city: string | null;
   announcement_title?: string | null;
@@ -111,7 +110,7 @@ interface ConversationParticipant {
   id: string;
   first_name: string;
   last_name: string;
-  avatar_url: string;
+  avatar_url: string | null;
 }
 
 interface Conversation {
@@ -149,6 +148,113 @@ const stringToColor = (str: string) => {
   return color;
 };
 
+interface AddUserModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  firstName: string;
+  setFirstName: (name: string) => void;
+  lastName: string;
+  setLastName: (name: string) => void;
+  email: string;
+  setEmail: (email: string) => void;
+  password: string;
+  setPassword: (password: string) => void;
+  userType: 'student' | 'advertiser' | 'admin';
+  setUserType: (type: 'student' | 'advertiser' | 'admin') => void;
+  onAddUser: () => void;
+  loading: boolean;
+}
+
+const AddUserModal: React.FC<AddUserModalProps> = ({
+  isOpen,
+  onClose,
+  firstName,
+  setFirstName,
+  lastName,
+  setLastName,
+  email,
+  setEmail,
+  password,
+  setPassword,
+  userType,
+  setUserType,
+  onAddUser,
+  loading,
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <Card className="w-full max-w-lg p-6 space-y-4 bg-background shadow-lg rounded-lg">
+        <CardHeader>
+          <CardTitle className="text-2xl font-bold">Add New User</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="new-first-name">First Name</Label>
+            <Input
+              id="new-first-name"
+              placeholder="First Name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="new-last-name">Last Name</Label>
+            <Input
+              id="new-last-name"
+              placeholder="Last Name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="new-email">Email</Label>
+            <Input
+              id="new-email"
+              type="email"
+              placeholder="email@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="new-password">Password</Label>
+            <Input
+              id="new-password"
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="new-user-type">User Type</Label>
+            <Select value={userType} onValueChange={(value: 'student' | 'advertiser' | 'admin') => setUserType(value)}>
+              <SelectTrigger id="new-user-type">
+                <SelectValue placeholder="Select user type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="student">Student</SelectItem>
+                <SelectItem value="advertiser">Advertiser</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose} disabled={loading}>
+              Cancel
+            </Button>
+            <Button onClick={onAddUser} disabled={loading || !firstName || !lastName || !email || !password || !userType}>
+              {loading ? "Adding..." : "Add User"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
   const [selectedTimeRange, setSelectedTimeRange] = useState("30d")
@@ -162,25 +268,23 @@ export default function AdminDashboard() {
   const [selectedListingStatusFilter, setSelectedListingStatusFilter] = useState("all");
   const [selectedReportStatusFilter, setSelectedReportStatusFilter] = useState("all");
   const [adminProfile, setAdminProfile] = useState<User | null>(null);
-  const [allAnnouncements, setAllAnnouncements] = useState<Announcement[]>([]); // New state for all announcements
-  const [messages, setMessages] = useState<Message[]>([]); // New state for messages
-  const [conversations, setConversations] = useState<Conversation[]>([]); // New state for grouped conversations
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null); // New state for active conversation
+  const [allAnnouncements, setAllAnnouncements] = useState<Announcement[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]); // Declared setMessages
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
   const [contactMessage, setContactMessage] = useState<string>("");
   const [messageContextId, setMessageContextId] = useState<string | null>(null);
   const [messageContextType, setMessageContextType] = useState<'listing' | 'announcement' | 'general'>('general');
   const [messageRecipientFirstName, setMessageRecipientFirstName] = useState<string>("");
   const [messageRecipientLastName, setMessageRecipientLastName] = useState<string>("");
-  const [messageRecipientAvatarUrl, setMessageRecipientAvatarUrl] = useState<string>("/placeholder.svg");
-
-  // Mock admin data - this part can remain mostly static unless you want to fetch admin profile.
-  const admin = {
-    name: "Admin User",
-    email: "admin@roommateTN.com",
-    avatar: "/placeholder.svg?key=admin",
-    role: "Super Admin",
-  }
+  const [messageRecipientAvatarUrl, setMessageRecipientAvatarUrl] = useState<string | null>(null);
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false); // New state for Add User modal
+  const [newFirstName, setNewFirstName] = useState("");
+  const [newLastName, setNewLastName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newUserType, setNewUserType] = useState<'student' | 'advertiser' | 'admin'>('student');
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
@@ -202,7 +306,7 @@ export default function AdminDashboard() {
     try {
       const params = new URLSearchParams();
       if (typeFilter !== "all") params.append("type", typeFilter);
-      if (statusFilter !== "all") params.append("status", statusFilter); // Not yet implemented in API
+      if (statusFilter !== "all") params.append("status", statusFilter);
 
       const response = await fetch(`/api/admin/users?${params.toString()}`);
       if (response.ok) {
@@ -255,7 +359,7 @@ export default function AdminDashboard() {
   const fetchAllAnnouncements = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/announcements"); // Assuming this fetches all announcements
+      const response = await fetch("/api/announcements");
       if (response.ok) {
         const data = await response.json();
         setAllAnnouncements(data);
@@ -275,8 +379,7 @@ export default function AdminDashboard() {
       const response = await fetch("/api/auth/session");
       if (response.ok) {
         const data = await response.json();
-        console.log("Admin Profile Data:", data); // Log profile data
-        setAdminProfile(data.user);
+        setAdminProfile(data);
       } else {
         console.error("Failed to fetch admin profile:", response.status);
       }
@@ -286,6 +389,8 @@ export default function AdminDashboard() {
       setLoading(false);
     }
   }, []);
+
+  const getAvatarDisplayUrl = (url: string | null | undefined) => url === null || url === undefined ? undefined : url;
 
   const groupMessagesByConversation = (allMessages: Message[], currentUserId: string, allListings: Listing[], allAnnouncements: Announcement[]): Conversation[] => {
     const conversationsMap = new Map<string, Conversation>();
@@ -305,7 +410,7 @@ export default function AdminDashboard() {
           : message.sender_last_name || "";
         const participantAvatarUrl = message.sender_id === currentUserId && adminProfile?.avatar_url 
           ? adminProfile.avatar_url 
-          : message.sender_avatar_url || "/placeholder.svg";
+          : message.sender_avatar_url || null;
 
         conversationsMap.set(conversationKey, {
           id: conversationKey,
@@ -359,16 +464,7 @@ export default function AdminDashboard() {
       const response = await fetch("/api/messages");
       if (response.ok) {
         const data: Message[] = await response.json();
-        console.log("Admin Raw Messages Data:", data); 
         setMessages(data);
-        if (adminProfile?.id) {
-          const grouped = groupMessagesByConversation(data, adminProfile.id, listings, allAnnouncements); // Use current listings and allAnnouncements
-          setConversations(grouped);
-          if (selectedConversation) {
-            const updatedSelected = grouped.find(conv => conv.id === selectedConversation.id);
-            setSelectedConversation(updatedSelected || null);
-          }
-        }
       } else {
         console.error("Failed to fetch messages:", response.status);
         toast.error("Failed to load messages.");
@@ -379,7 +475,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [adminProfile?.id, listings, allAnnouncements]);
+  }, [setMessages]); // Only depends on setMessages
 
   const handleSendMessage = useCallback(async () => {
     if (!adminProfile?.id || !messageRecipientId || !contactMessage.trim()) {
@@ -419,7 +515,7 @@ export default function AdminDashboard() {
             created_at: new Date().toISOString(),
             sender_first_name: adminProfile.first_name || "",
             sender_last_name: adminProfile.last_name || "",
-            sender_avatar_url: adminProfile.avatar_url || "/placeholder.svg",
+            sender_avatar_url: adminProfile.avatar_url || null,
             listing_title: selectedConversation.contextType === 'listing' ? selectedConversation.contextTitle : null,
             listing_city: selectedConversation.contextType === 'listing' ? selectedConversation.lastMessage.listing_city : null,
             announcement_title: selectedConversation.contextType === 'announcement' ? selectedConversation.contextTitle : null,
@@ -456,9 +552,9 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [adminProfile, messageRecipientId, contactMessage, messageContextId, messageContextType, fetchMessages, selectedConversation, listings, allAnnouncements]); // Added listings, allAnnouncements
+  }, [adminProfile, messageRecipientId, contactMessage, messageContextId, messageContextType, fetchMessages, selectedConversation, conversations]);
 
-  const handleOpenMessageModal = useCallback((recipientId: string, listingId: string | null = null, announcementId: string | null = null, recipientFirstName: string = "", recipientLastName: string = "", recipientAvatarUrl: string = "/placeholder.svg") => {
+  const handleOpenMessageModal = useCallback((recipientId: string, listingId: string | null = null, announcementId: string | null = null, recipientFirstName: string = "", recipientLastName: string = "", recipientAvatarUrl: string | null = null) => {
     setMessageRecipientId(recipientId);
     setMessageContextId(listingId || announcementId || null);
     setMessageContextType(listingId ? 'listing' : (announcementId ? 'announcement' : 'general'));
@@ -492,7 +588,7 @@ export default function AdminDashboard() {
           created_at: new Date().toISOString(),
           sender_first_name: adminProfile.first_name || "",
           sender_last_name: adminProfile.last_name || "",
-          sender_avatar_url: adminProfile.avatar_url || "/placeholder.svg",
+          sender_avatar_url: adminProfile.avatar_url || null,
           listing_title: listingId ? (listings.find(l => l.id === listingId)?.title || `Listing ${listingId}`) : null,
           listing_city: listingId ? (listings.find(l => l.id === listingId)?.city || null) : null,
           announcement_title: announcementId ? (allAnnouncements.find(a => a.id === announcementId)?.title || `Announcement ${announcementId}`) : null,
@@ -508,121 +604,73 @@ export default function AdminDashboard() {
     }
   }, [conversations, adminProfile, listings, allAnnouncements]);
 
-  const handleMessageUser = useCallback((userId: string, userFirstName: string, userLastName: string, userAvatarUrl: string) => {
-    handleOpenMessageModal(userId, null, null, userFirstName, userLastName, userAvatarUrl);
+  const handleMessageUser = useCallback((userId: string, userFirstName: string, userLastName: string, userAvatarUrl: string | null | undefined) => {
+    // Ensure userAvatarUrl is explicitly string | null before passing to handleOpenMessageModal
+    const avatarToPass = userAvatarUrl === undefined ? null : userAvatarUrl;
+    handleOpenMessageModal(userId, null, null, userFirstName, userLastName, avatarToPass);
   }, [handleOpenMessageModal]);
+
+  const handleAddUser = useCallback(async () => {
+    if (!newFirstName || !newLastName || !newEmail || !newPassword || !newUserType) {
+      toast.error("Please fill in all fields.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: newFirstName,
+          last_name: newLastName,
+          email: newEmail,
+          password: newPassword,
+          user_type: newUserType,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success("User added successfully!");
+        setIsAddUserModalOpen(false);
+        setNewFirstName("");
+        setNewLastName("");
+        setNewEmail("");
+        setNewPassword("");
+        setNewUserType('student');
+        fetchUsers(); // Refresh the user list
+      } else {
+        const errorData = await response.json();
+        toast.error(`Failed to add user: ${errorData.error || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error adding user:", error);
+      toast.error("An error occurred while adding the user.");
+    } finally {
+      setLoading(false);
+    }
+  }, [newFirstName, newLastName, newEmail, newPassword, newUserType, fetchUsers]);
 
   useEffect(() => {
     fetchStats();
     fetchUsers();
     fetchListings();
     fetchReports();
-    fetchAllAnnouncements(); // Fetch all announcements for moderation
+    fetchAllAnnouncements();
     fetchAdminProfile();
-    fetchMessages(); // Fetch messages for admin
-  }, [selectedTimeRange, userTypeFilter, userStatusFilter, selectedListingStatusFilter, selectedReportStatusFilter, fetchStats, fetchUsers, fetchListings, fetchReports, fetchAllAnnouncements, fetchAdminProfile, fetchMessages]); // Refetch when filters change or messages update
+    fetchMessages();
+  }, [selectedTimeRange, userTypeFilter, userStatusFilter, selectedListingStatusFilter, selectedReportStatusFilter, fetchStats, fetchUsers, fetchListings, fetchReports, fetchAllAnnouncements, fetchAdminProfile, fetchMessages]);
 
-  // Mock platform statistics
-  // const stats = {
-  //   totalUsers: 1247,
-  //   activeListings: 89,
-  //   pendingListings: 12,
-  //   totalRevenue: 15420,
-  //   newUsersThisMonth: 156,
-  //   averageRating: 4.6,
-  //   responseRate: 94,
-  //   flaggedContent: 3,
-  // }
-
-  // Mock users data
-  // const users = [
-  //   {
-  //     id: 1,
-  //     name: "Ahmed Ben Ali",
-  //     email: "ahmed.benali@university.tn",
-  //     avatar: "/student-woman.png",
-  //     type: "Student",
-  //     status: "active",
-  //     joinDate: "2024-01-15",
-  //     listings: 0,
-  //     reports: 0,
-  //     verified: true,
-  //   },
-  //   {
-  //     id: 2,
-  //     name: "Amira Ben Salem",
-  //     email: "amira.bensalem@email.com",
-  //     avatar: "/tunisian-woman-profile.jpg",
-  //     type: "Advertiser",
-  //     status: "active",
-  //     joinDate: "2024-02-20",
-  //     listings: 3,
-  //     reports: 0,
-  //     verified: true,
-  //   },
-  //   {
-  //     id: 3,
-  //     name: "Mohamed Trabelsi",
-  //     email: "mohamed.trabelsi@email.com",
-  //     avatar: "/placeholder.svg?key=mohamed2",
-  //     type: "Student",
-  //     status: "suspended",
-  //     joinDate: "2024-03-10",
-  //     listings: 0,
-  //     reports: 2,
-  //     verified: false,
-  //   },
-  // ]
-
-  // Mock pending listings
-  // const pendingListings = [
-  //   {
-  //     id: 1,
-  //     title: "Modern Apartment in Tunis Center",
-  //     owner: "Amira Ben Salem",
-  //     location: "Tunis, Bab Bhar",
-  //     price: 350,
-  //     image: "/modern-student-apartment-tunis.jpg",
-  //     submittedDate: "2 days ago",
-  //     status: "pending",
-  //     flagged: false,
-  //   },
-  //   {
-  //     id: 2,
-  //     title: "Student Room Near Campus",
-  //     owner: "Sarah Mejri",
-  //     location: "Sfax, University District",
-  //     price: 280,
-  //     image: "/placeholder.svg?key=pending1",
-  //     submittedDate: "1 day ago",
-  //     status: "pending",
-  //     flagged: true,
-  //   },
-  // ]
-
-  // Mock reports
-  // const reports = [
-  //   {
-  //     id: 1,
-  //     type: "inappropriate_content",
-  //     reportedItem: "Listing: Beach House in Sousse",
-  //     reportedBy: "Ahmed Ben Ali",
-  //     reason: "Misleading photos and description",
-  //     date: "1 day ago",
-  //     status: "pending",
-  //     severity: "medium",
-  //   },
-  //   {
-  //     id: 2,
-  //     type: "user_behavior",
-  //     reportedItem: "User: Mohamed Trabelsi",
-  //     reportedBy: "Fatma Khelifi",
-  //     reason: "Inappropriate messages and harassment",
-  //     date: "3 days ago",
-  //     status: "resolved",
-  //     severity: "high",
-  //   },
-  // ]
+  useEffect(() => {
+    if (adminProfile?.id && messages.length > 0) {
+      const grouped = groupMessagesByConversation(messages, adminProfile.id, listings, allAnnouncements);
+      setConversations(grouped);
+      if (selectedConversation) {
+        const updatedSelected = grouped.find(conv => conv.id === selectedConversation.id);
+        setSelectedConversation(updatedSelected || null);
+      }
+    }
+  }, [messages, adminProfile?.id, listings, allAnnouncements, selectedConversation]);
 
   const getListingImageUrl = (images: string | null) => {
     if (!images) return "/placeholder.svg";
@@ -648,7 +696,7 @@ export default function AdminDashboard() {
         return "bg-yellow-100 text-yellow-800"
       case "resolved":
         return "bg-blue-100 text-blue-800"
-      case "rejected": // For listings
+      case "rejected":
         return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
@@ -696,7 +744,7 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         toast.success(`User ${action}d successfully.`);
-        fetchUsers(); // Refresh the user list
+        fetchUsers();
       } else {
         const errorData = await response.json();
         toast.error(`Failed to ${action} user: ${errorData.error}`);
@@ -724,8 +772,8 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         toast.success(`Listing ${action}d successfully.`);
-        fetchListings(); // Refresh the listing list
-        fetchStats(); // Update stats as well
+        fetchListings();
+        fetchStats();
       } else {
         const errorData = await response.json();
         toast.error(`Failed to ${action} listing: ${errorData.error}`);
@@ -753,8 +801,8 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         toast.success(`Report ${action}d successfully.`);
-        fetchReports(); // Refresh the reports list
-        fetchStats(); // Update stats as well
+        fetchReports();
+        fetchStats();
       } else {
         const errorData = await response.json();
         toast.error(`Failed to ${action} report: ${errorData.error}`);
@@ -774,7 +822,7 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         toast.success("Announcement deleted successfully.");
-        fetchAllAnnouncements(); // Refresh the announcements list
+        fetchAllAnnouncements();
       } else {
         const errorData = await response.json();
         toast.error(`Failed to delete announcement: ${errorData.error}`);
@@ -787,15 +835,6 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Removed Header component */}
-      {/*
-      <Header
-        title="RoomMate TN Admin"
-        // navLinks={[]} // Header now manages its own navigation links
-        // authButtons={false} // Header now manages its own auth buttons
-      />
-      */}
-
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar */}
@@ -804,12 +843,12 @@ export default function AdminDashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-6">
                   <Avatar className="w-16 h-16">
-                    <AvatarImage src={adminProfile?.avatar_url || "/placeholder.svg"} />
+                    <AvatarImage src={getAvatarDisplayUrl(adminProfile?.avatar_url)} />
                     <AvatarFallback 
                       style={{ backgroundColor: adminProfile?.email ? stringToColor(adminProfile.email) : '#9ca3af' }} 
                       className="text-white font-semibold"
                     >
-                      {adminProfile?.first_name?.[0]}{adminProfile?.last_name?.[0]}
+                      {`${adminProfile?.first_name?.[0] || ''}${adminProfile?.last_name?.[0] || ''}`}
                     </AvatarFallback>
                   </Avatar>
                   <div>
@@ -853,7 +892,7 @@ export default function AdminDashboard() {
                     Reports & Flags
                   </Button>
                   <Button
-                    variant={activeTab === "announcements" ? "default" : "ghost"} // New tab for Announcements Moderation
+                    variant={activeTab === "announcements" ? "default" : "ghost"}
                     className="w-full justify-start"
                     onClick={() => setActiveTab("announcements")}
                   >
@@ -865,7 +904,7 @@ export default function AdminDashboard() {
                     className="w-full justify-start"
                     onClick={() => {
                       setActiveTab("messages");
-                      setSelectedConversation(null); // Clear selected conversation when navigating to messages tab
+                      setSelectedConversation(null);
                     }}
                   >
                     <Mail className="w-4 h-4 mr-3" />
@@ -974,7 +1013,6 @@ export default function AdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
-                        {/* Example: Display some recent user activity here, maybe from reports or new users */}
                         {loading && <p>Loading recent activity...</p>}
                         {!loading && users.slice(0, 3).map((user, index) => (
                           <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
@@ -1013,7 +1051,6 @@ export default function AdminDashboard() {
                             Review
                           </Button>
                         </div>
-                        {/* Placeholder for user verifications, if applicable */}
                         <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
                           <div>
                             <p className="text-sm font-medium text-foreground">User verifications</p>
@@ -1041,7 +1078,6 @@ export default function AdminDashboard() {
                     allAnnouncements.map((announcement) => (
                       <Card key={announcement.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
                         <div className="relative">
-                          {/* Removed: Image display for announcements */}
                         </div>
                         <CardContent className="p-4">
                           <h3 className="font-semibold text-foreground mb-2">{announcement.title}</h3>
@@ -1078,6 +1114,7 @@ export default function AdminDashboard() {
               <div key="users" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">User Management</h1>
+                  <Button onClick={() => setIsAddUserModalOpen(true)}>Add New User</Button>
                   <div className="flex items-center gap-2">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -1111,19 +1148,18 @@ export default function AdminDashboard() {
                 <div className="space-y-4">
                   {loading && <p>Loading users...</p>}
                   {!loading && users.map((user) => {
-                    console.log("User data for avatar in Admin Dashboard:", user);
                     return (
                     <Card key={user.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <Avatar className="w-12 h-12">
-                              <AvatarImage src={user.avatar_url || "/placeholder.svg"} />
+                              <AvatarImage src={getAvatarDisplayUrl(user.avatar_url)} />
                               <AvatarFallback 
                                 style={{ backgroundColor: user.email ? stringToColor(user.email) : '#9ca3af' }} 
                                 className="text-white font-semibold"
                               >
-                                {user.first_name?.[0]}{user.last_name?.[0]}
+                                {`${user.first_name?.[0] || ''}${user.last_name?.[0] || ''}`}
                               </AvatarFallback>
                             </Avatar>
                             <div>
@@ -1145,7 +1181,11 @@ export default function AdminDashboard() {
                                 <Eye className="w-4 h-4 mr-2" />
                                 View
                               </Button>
-                              <Button variant="outline" size="sm" onClick={() => handleMessageUser(user.id, user.first_name, user.last_name, user.avatar_url)}>
+                              {/* Explicitly cast user.avatar_url to string | null to satisfy linter */}
+                              <Button variant="outline" size="sm" onClick={() => {
+                                const avatar = user.avatar_url as string | null;
+                                handleMessageUser(user.id, user.first_name, user.last_name, avatar);
+                              }}>
                                 <MessageSquare className="w-4 h-4 mr-2" />
                                 Message
                               </Button>
@@ -1205,7 +1245,6 @@ export default function AdminDashboard() {
                 <div className="space-y-4">
                   {loading && <p>Loading listings...</p>}
                   {!loading && listings.map((listing) => {
-                    console.log("Listing images string for admin dashboard:", listing.images);
                     return (
                     <Card key={listing.id} className={`group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out ${listing.status === 'pending' ? "border-yellow-200" : ""}`}>
                       <CardContent className="p-6">
@@ -1355,17 +1394,18 @@ export default function AdminDashboard() {
                   <div className="space-y-4">
                     {loading && <p>Loading conversations...</p>}
                     {!loading && conversations.length === 0 && <p className="text-muted-foreground">No conversations found.</p>}
-                    {!loading && conversations.map(conversation => (
+                    {!loading && conversations.map(conversation => {
+                      return (
                       <Card key={conversation.id} className="hover:shadow-lg transition-shadow duration-300 ease-in-out cursor-pointer"
                         onClick={() => setSelectedConversation(conversation)}>
                         <CardContent className="p-4 flex items-start gap-4">
                           <Avatar className="w-12 h-12">
-                            <AvatarImage src={conversation.participant.avatar_url || "/placeholder.svg"} />
+                            <AvatarImage src={getAvatarDisplayUrl(conversation.participant.avatar_url)} />
                             <AvatarFallback 
                               style={{ backgroundColor: conversation.participant.id ? stringToColor(conversation.participant.id) : '#9ca3af' }} 
                               className="text-white font-semibold"
                             >
-                              {conversation.participant.first_name?.[0]}{conversation.participant.last_name?.[0]}
+                              {`${conversation.participant.first_name?.[0] || ''}${conversation.participant.last_name?.[0] || ''}`}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
@@ -1383,7 +1423,7 @@ export default function AdminDashboard() {
                           </div>
                         </CardContent>
                       </Card>
-                    ))}
+                      )})}
                   </div>
                 ) : (
                   // Selected Conversation Detail View
@@ -1392,12 +1432,12 @@ export default function AdminDashboard() {
                       <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                           <Avatar className="w-8 h-8">
-                            <AvatarImage src={selectedConversation.participant.avatar_url || "/placeholder.svg"} />
+                            <AvatarImage src={getAvatarDisplayUrl(selectedConversation.participant.avatar_url)} />
                             <AvatarFallback 
                               style={{ backgroundColor: selectedConversation.participant.id ? stringToColor(selectedConversation.participant.id) : '#9ca3af' }} 
                               className="text-white font-semibold"
                             >
-                              {selectedConversation.participant.first_name?.[0]}{selectedConversation.participant.last_name?.[0]}
+                              {`${selectedConversation.participant.first_name?.[0] || ''}${selectedConversation.participant.last_name?.[0] || ''}`}
                             </AvatarFallback>
                           </Avatar>
                           <span>{selectedConversation.participant.first_name} {selectedConversation.participant.last_name}</span>
@@ -1410,16 +1450,17 @@ export default function AdminDashboard() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar p-4">
-                        {selectedConversation.messages.map((message, index) => (
+                        {selectedConversation.messages.map((message, index) => {
+                          return (
                           <div key={message.id || index} className={`flex gap-3 ${message.sender_id === adminProfile?.id ? 'justify-end' : 'justify-start'}`}>
                             {message.sender_id !== adminProfile?.id && (
                               <Avatar className="w-8 h-8">
-                                <AvatarImage src={message.sender_avatar_url || "/placeholder.svg"} />
+                                <AvatarImage src={getAvatarDisplayUrl(message.sender_avatar_url)} />
                                 <AvatarFallback 
                                   style={{ backgroundColor: message.sender_id ? stringToColor(message.sender_id) : '#9ca3af' }} 
                                   className="text-white font-semibold"
                                 >
-                                  {message.sender_first_name?.[0]}{message.sender_last_name?.[0]}
+                                  {`${message.sender_first_name?.[0] || ''}${message.sender_last_name?.[0] || ''}`}
                                 </AvatarFallback>
                               </Avatar>
                             )}
@@ -1431,17 +1472,17 @@ export default function AdminDashboard() {
                             </div>
                             {message.sender_id === adminProfile?.id && (
                               <Avatar className="w-8 h-8">
-                                <AvatarImage src={adminProfile.avatar_url || "/placeholder.svg"} />
+                                <AvatarImage src={getAvatarDisplayUrl(adminProfile.avatar_url)} />
                                 <AvatarFallback 
                                   style={{ backgroundColor: adminProfile.email ? stringToColor(adminProfile.email) : '#9ca3af' }} 
                                   className="text-white font-semibold"
                                 >
-                                  {adminProfile.first_name?.[0]}{adminProfile.last_name?.[0]}
+                                  {`${adminProfile.first_name?.[0] || ''}${adminProfile.last_name?.[0] || ''}`}
                                 </AvatarFallback>
                               </Avatar>
                             )}
                           </div>
-                        ))}
+                          )})}
                       </CardContent>
                     </Card>
 
@@ -1484,7 +1525,7 @@ export default function AdminDashboard() {
                           <span className="font-medium">{stats?.totalUsers}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">New This Month</span>
+                          <span className="text-sm text-green-600">New This Month</span>
                           <span className="font-medium text-green-600">+{stats?.newUsersThisMonth}</span>
                         </div>
                       </div>
@@ -1502,7 +1543,7 @@ export default function AdminDashboard() {
                           <span className="font-medium">{stats?.activeListings}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Pending Approval</span>
+                          <span className="text-sm text-yellow-600">Pending Approval</span>
                           <span className="font-medium text-yellow-600">{stats?.pendingListings}</span>
                         </div>
                         <div className="flex justify-between items-center">
@@ -1532,7 +1573,7 @@ export default function AdminDashboard() {
                           <span className="font-medium">N/A</span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Active Reports</span>
+                          <span className="text-sm text-red-600">Active Reports</span>
                           <span className="font-medium text-red-600">{stats?.flaggedContent}</span>
                         </div>
                         <div className="flex justify-between items-center">
@@ -1549,7 +1590,6 @@ export default function AdminDashboard() {
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
-                        {/* Placeholder for top cities, if available from stats API */}
                         <p className="text-muted-foreground">Data not available</p>
                       </div>
                     </CardContent>
@@ -1722,6 +1762,22 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+      <AddUserModal
+        isOpen={isAddUserModalOpen}
+        onClose={() => setIsAddUserModalOpen(false)}
+        firstName={newFirstName}
+        setFirstName={setNewFirstName}
+        lastName={newLastName}
+        setLastName={setNewLastName}
+        email={newEmail}
+        setEmail={setNewEmail}
+        password={newPassword}
+        setPassword={setNewPassword}
+        userType={newUserType}
+        setUserType={setNewUserType}
+        onAddUser={handleAddUser}
+        loading={loading}
+      />
     </div>
   )
 }

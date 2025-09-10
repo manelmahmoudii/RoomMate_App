@@ -27,6 +27,22 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Label } from "@/components/ui/label"
 
+// Helper function to generate a consistent color from a string
+const stringToColor = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  let color = '#';
+  for (let i = 0; i < 3; i++) {
+    const value = (hash >> (i * 8)) & 0xFF;
+    color += ('00' + value.toString(16)).substr(-2);
+  }
+  return color;
+};
+
+const getAvatarDisplayUrl = (url: string | null | undefined) => url === null || url === undefined ? undefined : url;
+
 interface ListingDetail {
   id: string;
   owner_id: string;
@@ -50,7 +66,7 @@ interface ListingDetail {
   owner_last_name: string;
   owner_email: string;
   owner_phone: string;
-  owner_avatar_url: string;
+  owner_avatar_url: string | null;
   owner_bio: string;
   owner_created_at: string;
 }
@@ -62,7 +78,7 @@ interface Comment {
   profiles: {
     user_id: string;
     full_name: string;
-    avatar_url: string;
+    avatar_url: string | null;
   };
 }
 
@@ -521,8 +537,11 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
                   {comments.map((comment) => (
                     <div key={comment.id} className="flex gap-3 p-4 rounded-lg bg-muted/30">
                       <Avatar className="w-10 h-10">
-                        <AvatarImage src={comment.profiles?.avatar_url || "/placeholder.svg"} />
-                        <AvatarFallback>
+                        <AvatarImage src={getAvatarDisplayUrl(comment.profiles?.avatar_url)} />
+                        <AvatarFallback 
+                          style={{ backgroundColor: comment.profiles?.user_id ? stringToColor(comment.profiles.user_id) : '#9ca3af' }}
+                          className="text-white font-semibold"
+                        >
                           {comment.profiles?.full_name
                             ?.split(" ")
                             .map((n: string) => n[0])
@@ -558,8 +577,11 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">
                   <Avatar className="w-16 h-16">
-                    <AvatarImage src={listing.owner_avatar_url || "/placeholder.svg"} />
-                    <AvatarFallback>
+                    <AvatarImage src={getAvatarDisplayUrl(listing.owner_avatar_url)} />
+                    <AvatarFallback 
+                      style={{ backgroundColor: listing.owner_email ? stringToColor(listing.owner_email) : '#9ca3af' }}
+                      className="text-white font-semibold"
+                    >
                       {listing.owner_first_name?.[0]}{listing.owner_last_name?.[0]}
                     </AvatarFallback>
                   </Avatar>

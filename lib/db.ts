@@ -16,8 +16,8 @@ async function initializePool() {
     password: DB_PASSWORD,
     database: DB_NAME,
     waitForConnections: true,
-    connectionLimit: 10, // Adjust as needed
-    queueLimit: 0,
+    connectionLimit: 20, // Increased connection limit
+    queueLimit: 100, // Increased queue limit to allow connections to wait
   });
 }
 

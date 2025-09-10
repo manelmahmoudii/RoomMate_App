@@ -12,11 +12,34 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Search, MapPin, Users, Star, Heart, Filter, SlidersHorizontal, Grid3X3, List, ArrowUpDown } from "lucide-react"
 import Link from "next/link"
 
+interface Listing {
+  id: string;
+  owner_id: string;
+  title: string;
+  description: string;
+  price: number;
+  city: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  room_type: string | null;
+  number_of_roommates: number;
+  amenities: string | null; // JSON string
+  images: string | null; // JSON string
+  available_from: string | null;
+  status: string;
+  views_count: number;
+  created_at: string;
+  first_name: string;
+  last_name: string;
+  user_type: string; // From joined users table
+}
+
 export default function SearchPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [showFilters, setShowFilters] = useState(true)
   const [priceRange, setPriceRange] = useState([200, 800])
-  const [listings, setListings] = useState<any[]>([])
+  const [listings, setListings] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState("")
@@ -24,6 +47,20 @@ export default function SearchPage() {
   const [selectedRoommates, setSelectedRoommates] = useState("any")
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [sortBy, setSortBy] = useState("newest")
+
+  const parseJsonSafely = (jsonString: string | null | any, defaultValue: any) => {
+    if (jsonString === null || jsonString === undefined) return defaultValue;
+    // If it's already an object or array, return it directly
+    if (typeof jsonString === 'object' && jsonString !== null) {
+      return jsonString;
+    }
+    try {
+      return JSON.parse(jsonString);
+    } catch (e) {
+      console.error("Error parsing JSON string:", jsonString, e);
+      return defaultValue;
+    }
+  };
 
   useEffect(() => {
     fetchListings();
@@ -35,10 +72,10 @@ export default function SearchPage() {
       const params = new URLSearchParams();
       if (searchTerm) params.append("search", searchTerm);
       if (selectedCity !== "all") params.append("city", selectedCity);
-      if (selectedRoommates !== "any") params.append("max_roommates", selectedRoommates);
+      if (selectedRoommates !== "any") params.append("number_of_roommates", selectedRoommates);
       params.append("min_price", priceRange[0].toString());
       params.append("max_price", priceRange[1].toString());
-      if (verifiedOnly) params.append("verified", "true");
+      if (verifiedOnly) params.append("verified", "true"); // Assuming a 'verified' column or logic in API
       params.append("sort_by", sortBy);
 
       const response = await fetch(`/api/listings?${params.toString()}`);
@@ -55,79 +92,92 @@ export default function SearchPage() {
     }
   };
 
-  const ListingCard = ({ listing, isListView = false }: { listing: any; isListView?: boolean }) => (
-    <Card
-      className={`group hover:shadow-xl transition-all duration-300 border-border overflow-hidden hover-lift ${isListView ? "flex" : ""}`}
-    >
-      <div className={`relative ${isListView ? "w-80 flex-shrink-0" : ""}`}>
-        <img
-          src={listing.images?.[0] || "/placeholder.svg?height=200&width=300&query=modern apartment room"}
-          alt={listing.title}
-          className={`object-cover group-hover:scale-105 transition-transform duration-300 ${
-            isListView ? "w-full h-full" : "w-full h-48"
-          }`}
-        />
-        <Button
-          size="icon"
-          variant="ghost"
-          className="absolute top-3 right-3 bg-background/80 hover:bg-background"
-          
-        >
-          <Heart className="w-4 h-4" />
-        </Button>
-        <Badge className="absolute bottom-3 left-3 bg-primary text-primary-foreground">{listing.price} TND/month</Badge>
-        {listing.profiles?.user_type === "verified" && (
-          <Badge className="absolute top-3 left-3 bg-green-500 text-white text-xs">Verified</Badge>
-        )}
-      </div>
+  const ListingCard = ({ listing, isListView = false }: { listing: Listing; isListView?: boolean }) => {
+    const imageUrls = parseJsonSafely(listing.images, []);
+    const amenitiesList = parseJsonSafely(listing.amenities, []);
+    const displayedAmenities = amenitiesList.slice(0, isListView ? 6 : 4);
+    const fullAddress = [listing.address, listing.city].filter(Boolean).join(", ");
+    const imgSrc = imageUrls[0] || "/placeholder.svg?height=200&width=300&query=modern apartment room";
 
-      <CardContent className={`p-6 ${isListView ? "flex-1" : ""}`}>
-        <div className="flex items-start justify-between mb-3">
-          <h3 className="font-semibold text-foreground text-lg group-hover:text-primary transition-colors">
-            {listing.title}
-          </h3>
-          <div className="flex items-center gap-1">
-            <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-            <span className="text-sm font-medium">4.8</span>
-            <span className="text-xs text-muted-foreground">(24)</span>
-          </div>
-        </div>
-
-        <div className="flex items-center text-muted-foreground mb-3">
-          <MapPin className="w-4 h-4 mr-1" />
-          <span className="text-sm">
-            {listing.location}, {listing.city}
-          </span>
-        </div>
-
-        <div className="flex items-center text-muted-foreground mb-4">
-          <Users className="w-4 h-4 mr-1" />
-          <span className="text-sm">
-            {listing.max_roommates} max roommates • {listing.room_type}
-          </span>
-        </div>
-
-        {isListView && <p className="text-muted-foreground text-sm mb-4 line-clamp-2">{listing.description}</p>}
-
-        <div className="flex flex-wrap gap-2 mb-4">
-          {listing.amenities?.slice(0, isListView ? 6 : 4).map((amenity: string, index: number) => (
-            <Badge key={index} variant="secondary" className="text-xs">
-              {amenity}
-            </Badge>
-          ))}
-        </div>
-
-        <div className={`${isListView ? "flex items-center justify-between" : ""}`}>
-          <div className={`text-xs text-muted-foreground ${isListView ? "" : "mb-4"}`}>
-            Listed by {listing.profiles?.full_name}
-          </div>
-          <Button className={`bg-primary hover:bg-primary/90 smooth-transition ${isListView ? "" : "w-full"}`} asChild>
-            <Link href={`/listings/${listing.id}`}>{isListView ? "View Details" : "View Details"}</Link>
+    return (
+      <Card
+        className={`group hover:shadow-xl transition-all duration-300 border-border overflow-hidden hover-lift ${isListView ? "flex" : ""}`}
+      >
+        <div className={`relative ${isListView ? "w-80 flex-shrink-0" : ""}`}>
+          <img
+            src={imgSrc}
+            alt={listing.title}
+            className={`object-cover group-hover:scale-105 transition-transform duration-300 ${
+              isListView ? "w-full h-full" : "w-full h-48"
+            }`}
+          />
+          <Button
+            size="icon"
+            variant="ghost"
+            className="absolute top-3 right-3 bg-background/80 hover:bg-background"
+          >
+            <Heart className="w-4 h-4" />
           </Button>
+          <Badge className="absolute bottom-3 left-3 bg-primary text-primary-foreground">{listing.price} TND/month</Badge>
+          {listing.user_type === "advertiser" && (
+            <Badge className="absolute top-3 left-3 bg-green-500 text-white text-xs">Verified</Badge>
+          )}
         </div>
-      </CardContent>
-    </Card>
-  )
+
+        <CardContent className={`p-6 ${isListView ? "flex-1" : ""}`}>
+          <div className="flex items-start justify-between mb-3">
+            <h3 className="font-semibold text-foreground text-lg group-hover:text-primary transition-colors">
+              {listing.title}
+            </h3>
+            <div className="flex items-center gap-1">
+              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+              <span className="text-sm font-medium">4.8</span>
+              <span className="text-xs text-muted-foreground">(24)</span>
+            </div>
+          </div>
+
+          <div className="flex items-center text-muted-foreground mb-3">
+            <MapPin className="w-4 h-4 mr-1" />
+            <span className="text-sm">
+              {fullAddress}
+            </span>
+          </div>
+
+          <div className="flex items-center text-muted-foreground mb-4">
+            <Users className="w-4 h-4 mr-1" />
+            <span className="text-sm">
+              {listing.number_of_roommates} max roommates {listing.room_type && `• ${listing.room_type}`}
+            </span>
+          </div>
+
+          {isListView && <p className="text-muted-foreground text-sm mb-4 line-clamp-2">{listing.description}</p>}
+
+          {listing.available_from && (
+            <p className="text-sm text-muted-foreground mb-2">
+              Available from: {new Date(listing.available_from).toLocaleDateString()}
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2 mb-4">
+            {displayedAmenities.map((amenity: string, index: number) => (
+              <Badge key={index} variant="secondary" className="text-xs">
+                {amenity}
+              </Badge>
+            ))}
+          </div>
+
+          <div className={`${isListView ? "flex items-center justify-between" : ""}`}>
+            <div className={`text-xs text-muted-foreground ${isListView ? "" : "mb-4"}`}>
+              Listed by {listing.first_name} {listing.last_name}
+            </div>
+            <Button className={`bg-primary hover:bg-primary/90 smooth-transition ${isListView ? "" : "w-full"}`} asChild>
+              <Link href={`/listings/${listing.id}`}>{isListView ? "View Details" : "View Details"}</Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-background">

@@ -24,11 +24,12 @@
   --border: oklch(0.92 0.01 240);
   --input: oklch(1 0 0);
   --ring: oklch(0.55 0.15 240 / 0.3); /* Bright blue ring */
-  --chart-1: oklch(0.55 0.15 240);
-  --chart-2: oklch(0.65 0.12 220);
-  --chart-3: oklch(0.6 0.18 210);
-  --chart-4: oklch(0.45 0.1 250);
-  --chart-5: oklch(0.7 0.14 200);
+  /* Diversified chart colors */
+  --chart-1: oklch(0.55 0.15 240); /* Blue */
+  --chart-2: oklch(0.65 0.15 80);  /* Yellow/Orange */
+  --chart-3: oklch(0.6 0.18 210);  /* Cyan */
+  --chart-4: oklch(0.45 0.15 160); /* Green */
+  --chart-5: oklch(0.7 0.14 0);   /* Red/Pink */
   --radius: 0.75rem;
   --sidebar: oklch(0.98 0.005 240);
   --sidebar-foreground: oklch(0.45 0.02 240);
@@ -60,11 +61,12 @@
   --border: oklch(0.18 0.02 240);
   --input: oklch(0.18 0.02 240);
   --ring: oklch(0.65 0.18 220 / 0.4);
-  --chart-1: oklch(0.65 0.18 220);
-  --chart-2: oklch(0.55 0.15 240);
-  --chart-3: oklch(0.7 0.2 210);
-  --chart-4: oklch(0.45 0.1 250);
-  --chart-5: oklch(0.75 0.16 200);
+  /* Diversified chart colors for dark mode */
+  --chart-1: oklch(0.65 0.18 220); /* Blue */
+  --chart-2: oklch(0.75 0.18 80);  /* Yellow/Orange */
+  --chart-3: oklch(0.7 0.2 210);   /* Cyan */
+  --chart-4: oklch(0.55 0.15 160); /* Green */
+  --chart-5: oklch(0.8 0.16 0);    /* Red/Pink */
   --sidebar: oklch(0.12 0.015 240);
   --sidebar-foreground: oklch(0.95 0.005 240);
   --sidebar-primary: oklch(0.65 0.18 220);
@@ -203,6 +205,12 @@
   }
 }
 
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.8; }
+  100% { opacity: 1; }
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -228,4 +236,23 @@
 
 .animate-scale-in-modal {
   animation: scale-in-modal 0.3s ease-out forwards;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--muted);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-foreground);
 }

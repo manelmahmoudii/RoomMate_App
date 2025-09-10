@@ -20,44 +20,44 @@ export async function GET(request: NextRequest) {
     connection = await getConnection();
     const searchParams = request.nextUrl.searchParams;
     
-    let query = "SELECT id, owner_id, title, description, price, city, number_of_roommates, amenities, images, status, created_at FROM listings WHERE 1=1";
+    let query = "SELECT l.id, l.owner_id, l.title, l.description, l.price, l.city, l.address, l.latitude, l.longitude, l.room_type, l.number_of_roommates, l.amenities, l.images, l.available_from, l.status, l.views_count, l.created_at, u.first_name, u.last_name, u.user_type FROM listings l JOIN users u ON l.owner_id = u.id WHERE 1=1";
     const params: (string | number)[] = [];
 
     if (decodedToken?.role === "advertiser") {
-      query += " AND owner_id = ?";
+      query += " AND l.owner_id = ?";
       params.push(decodedToken.id);
     } else {
-      query += " AND status = 'active'";
+      query += " AND l.status = 'active'";
     }
 
     // Apply filters from search parameters
     const searchTerm = searchParams.get("search");
     if (searchTerm) {
-      query += " AND (title LIKE ? OR description LIKE ? OR city LIKE ?)";
+      query += " AND (l.title LIKE ? OR l.description LIKE ? OR l.city LIKE ?)";
       params.push(`%${searchTerm}%`, `%${searchTerm}%`, `%${searchTerm}%`);
     }
 
     const city = searchParams.get("city");
     if (city && city !== "all") {
-      query += " AND city = ?";
+      query += " AND l.city = ?";
       params.push(city);
     }
 
     const maxRoommates = searchParams.get("max_roommates");
     if (maxRoommates && maxRoommates !== "any") {
-      query += " AND number_of_roommates <= ?";
+      query += " AND l.number_of_roommates <= ?";
       params.push(parseInt(maxRoommates));
     }
 
     const minPrice = searchParams.get("min_price");
     if (minPrice) {
-      query += " AND price >= ?";
+      query += " AND l.price >= ?";
       params.push(parseFloat(minPrice));
     }
 
     const maxPrice = searchParams.get("max_price");
     if (maxPrice) {
-      query += " AND price <= ?";
+      query += " AND l.price <= ?";
       params.push(parseFloat(maxPrice));
     }
 
@@ -72,16 +72,16 @@ export async function GET(request: NextRequest) {
     if (sortBy) {
       switch (sortBy) {
         case "newest":
-          query += " ORDER BY created_at DESC";
+          query += " ORDER BY l.created_at DESC";
           break;
         case "price-low":
-          query += " ORDER BY price ASC";
+          query += " ORDER BY l.price ASC";
           break;
         case "price-high":
-          query += " ORDER BY price DESC";
+          query += " ORDER BY l.price DESC";
           break;
         default:
-          query += " ORDER BY created_at DESC";
+          query += " ORDER BY l.created_at DESC";
       }
     }
 
