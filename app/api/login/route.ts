@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 import { getConnection } from "@/lib/db"; // Removed initDB from import
 import { revalidatePath } from 'next/cache'; // Import revalidatePath
 
-const SECRET_KEY = process.env.JWT_SECRET || "71553dd0e04e28ad0a85e9b6790afdd8e061f0f0526481f10fce6765a3989b23a0466cffaf0f7ffadd461e4e016a1c50c9c4b76d02764d32ed80711aaf431bfb";
+const SECRET_KEY = process.env.JWT_SECRET;
 
 export async function POST(req: NextRequest) {
   let connection;

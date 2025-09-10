@@ -1,15 +1,71 @@
+"use client";
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Search, MapPin, Users, Star, Heart, ArrowRight, CheckCircle, Shield, Clock } from "lucide-react"
 import Link from "next/link"
-import { cookies } from "next/headers"
+import { useState } from "react"
+import { Listing } from "@/lib/types"
+import { useRouter } from "next/navigation"
 
-export default async function HomePage() {
-   const cookieStore = cookies();
-  const isLoggedIn = cookieStore.has("token");
-   
+export default function HomePage() {
+  return (
+    <ClientHomePageContent />
+  )
+}
+
+function ClientHomePageContent() {
+  const [cityFilter, setCityFilter] = useState("");
+  const [maxPriceFilter, setMaxPriceFilter] = useState<number | null>(null);
+  const router = useRouter();
+
+  const staticListings = [
+    {
+      id: 1,
+      image: "/modern-student-apartment-tunis.jpg",
+      title: "Modern Apartment in Tunis Center",
+      location: "Tunis, Bab Bhar",
+      price: "350",
+      roommates: 2,
+      rating: 4.8,
+      features: ["WiFi", "Furnished", "Near Metro"],
+    },
+    {
+      id: 2,
+      image: "/cozy-student-room-sfax.jpg",
+      title: "Cozy Room Near University",
+      location: "Sfax, University District",
+      price: "280",
+      roommates: 3,
+      rating: 4.9,
+      features: ["Study Room", "Kitchen", "Parking"],
+    },
+    {
+      id: 3,
+      image: "/shared-apartment-sousse-beach.jpg",
+      title: "Beach-Side Shared Space",
+      location: "Sousse, Kantaoui",
+      price: "420",
+      roommates: 2,
+      rating: 4.7,
+      features: ["Sea View", "Balcony", "Pool Access"],
+    },
+  ];
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const queryParams = new URLSearchParams();
+    if (cityFilter) {
+      queryParams.append("city", cityFilter);
+    }
+    if (maxPriceFilter !== null) {
+      queryParams.append("max_price", maxPriceFilter.toString());
+    }
+    router.push(`/search?${queryParams.toString()}`);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
@@ -35,13 +91,15 @@ export default async function HomePage() {
 
             {/* Search Bar */}
             <div className="bg-card border border-border rounded-2xl p-6 shadow-lg max-w-2xl mx-auto mb-8 animate-scale-in hover-lift">
-              <form action="/search" method="GET" className="flex flex-col sm:flex-row gap-4">
+              <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row gap-4">
                 <div className="flex-1 relative">
                   <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
                   <Input
                     name="city"
                     placeholder="City (Tunis, Sfax, Sousse...)"
                     className="pl-10 h-12 border-0 bg-background smooth-transition focus:ring-2 focus:ring-primary/20"
+                    value={cityFilter}
+                    onChange={(e) => setCityFilter(e.target.value)}
                   />
                 </div>
                 <div className="flex-1 relative">
@@ -51,6 +109,8 @@ export default async function HomePage() {
                     type="number"
                     placeholder="Budget (TND)"
                     className="pl-10 h-12 border-0 bg-background smooth-transition focus:ring-2 focus:ring-primary/20"
+                    value={maxPriceFilter !== null ? maxPriceFilter : ''}
+                    onChange={(e) => setMaxPriceFilter(e.target.value ? parseInt(e.target.value) : null)}
                   />
                 </div>
                 <Button
@@ -72,7 +132,7 @@ export default async function HomePage() {
                 </Link>
               </Button>
               <Button variant="outline" size="lg" className="px-8 bg-transparent smooth-transition hover-lift" asChild>
-                <Link href="/auth/signup">Post Your Room</Link>
+                <Link href="/search">Post Your Room</Link>
               </Button>
             </div>
           </div>
@@ -90,100 +150,68 @@ export default async function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            { 
-             
-                [
-                  {
-                    id: 1,
-                    image: "/modern-student-apartment-tunis.jpg",
-                    title: "Modern Apartment in Tunis Center",
-                    location: "Tunis, Bab Bhar",
-                    price: "350",
-                    roommates: 2,
-                    rating: 4.8,
-                    features: ["WiFi", "Furnished", "Near Metro"],
-                  },
-                  {
-                    id: 2,
-                    image: "/cozy-student-room-sfax.jpg",
-                    title: "Cozy Room Near University",
-                    location: "Sfax, University District",
-                    price: "280",
-                    roommates: 3,
-                    rating: 4.9,
-                    features: ["Study Room", "Kitchen", "Parking"],
-                  },
-                  {
-                    id: 3,
-                    image: "/shared-apartment-sousse-beach.jpg",
-                    title: "Beach-Side Shared Space",
-                    location: "Sousse, Kantaoui",
-                    price: "420",
-                    roommates: 2,
-                    rating: 4.7,
-                    features: ["Sea View", "Balcony", "Pool Access"],
-                  },
-                ].map((listing, index) => (
-                  <Card
-                    key={listing.id}
-                    className="group hover:shadow-xl smooth-transition border-border overflow-hidden hover-lift animate-fade-in"
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <div className="relative">
-                      <img
-                        src={listing.image || "/placeholder.svg"}
-                        alt={listing.title}
-                        className="w-full h-48 object-cover group-hover:scale-105 smooth-transition"
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="absolute top-3 right-3 bg-background/80 hover:bg-background smooth-transition"
-                      >
-                        <Heart className="w-4 h-4" />
-                      </Button>
-                      <Badge className="absolute bottom-3 left-3 bg-primary text-primary-foreground">
-                        {listing.price} TND/month
-                      </Badge>
+            {
+              staticListings.map((listing, index) => (
+                <Card
+                  key={listing.id}
+                  className="group hover:shadow-xl smooth-transition border-border overflow-hidden hover-lift animate-fade-in"
+                  style={{ animationDelay: `${index * 0.1}s` }}
+                >
+                  <div className="relative">
+                    <img
+                      src={listing.image || "/placeholder.svg"}
+                      alt={listing.title}
+                      className="w-full h-48 object-cover group-hover:scale-105 smooth-transition"
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="absolute top-3 right-3 bg-background/80 hover:bg-background smooth-transition"
+                    >
+                      <Heart className="w-4 h-4" />
+                    </Button>
+                    <Badge className="absolute bottom-3 left-3 bg-primary text-primary-foreground">
+                      {listing.price} TND/month
+                    </Badge>
+                  </div>
+
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between mb-3">
+                      <h3 className="font-semibold text-foreground text-lg group-hover:text-primary smooth-transition">
+                        {listing.title}
+                      </h3>
+                      <div className="flex items-center gap-1">
+                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                        <span className="text-sm font-medium">{listing.rating}</span>
+                      </div>
                     </div>
 
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-3">
-                        <h3 className="font-semibold text-foreground text-lg group-hover:text-primary smooth-transition">
-                          {listing.title}
-                        </h3>
-                        <div className="flex items-center gap-1">
-                          <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                          <span className="text-sm font-medium">{listing.rating}</span>
-                        </div>
-                      </div>
+                    <div className="flex items-center text-muted-foreground mb-4">
+                      <MapPin className="w-4 h-4 mr-1" />
+                      <span className="text-sm">{listing.location}</span>
+                    </div>
 
-                      <div className="flex items-center text-muted-foreground mb-4">
-                        <MapPin className="w-4 h-4 mr-1" />
-                        <span className="text-sm">{listing.location}</span>
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center text-muted-foreground">
+                        <Users className="w-4 h-4 mr-1" />
+                        <span className="text-sm">{listing.roommates} roommates</span>
                       </div>
+                    </div>
 
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center text-muted-foreground">
-                          <Users className="w-4 h-4 mr-1" />
-                          <span className="text-sm">{listing.roommates} roommates</span>
-                        </div>
-                      </div>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {listing.features.map((feature, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {feature}
+                        </Badge>
+                      ))}
+                    </div>
 
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {listing.features.map((feature, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs">
-                            {feature}
-                          </Badge>
-                        ))}
-                      </div>
-
-                      <Button className="w-full bg-primary hover:bg-primary/90 smooth-transition hover-lift" asChild>
-                        <Link href={`/listings/${listing.id}`}>View Details</Link>
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+                    <Button className="w-full bg-primary hover:bg-primary/90 smooth-transition hover-lift" asChild>
+                      <Link href={`/listings/${listing.id}`}>View Details</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
           </div>
 
           <div className="text-center animate-fade-in">

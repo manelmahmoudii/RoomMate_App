@@ -2,7 +2,7 @@ import { SignJWT, jwtVerify, JWTPayload } from 'jose';
 import { cookies } from 'next/headers';
 import { UserSession } from '@/lib/types';
 
-const SECRET_KEY = process.env.JWT_SECRET || 'fallback_secret_key';
+const SECRET_KEY = process.env.JWT_SECRET;
 const KEY = new TextEncoder().encode(SECRET_KEY);
 
 export async function encrypt(payload: UserSession) {
