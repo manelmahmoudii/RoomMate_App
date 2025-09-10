@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
-import { getConnection, initDB } from "@/lib/db";
+import { getConnection } from "@/lib/db";
 import { promises as fs } from 'fs';
 import path from 'path';
 
 export async function POST(req: NextRequest) {
   let connection;
   try {
-    await initDB();
+    // await initDB();
     connection = await getConnection();
 
     const formData = await req.formData();

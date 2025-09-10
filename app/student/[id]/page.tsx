@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from 'react-hot-toast'; // Import toast
 
 interface UserSession {
   id: string;
@@ -96,7 +97,7 @@ export default function StudentProfilePage() {
       }
     };
 
-    const fetchUserSession = async () => {
+    const fetchUserSession = async (): Promise<UserSession | null> => {
       try {
         const response = await fetch("/api/auth/session", {
           credentials: 'include',
@@ -104,13 +105,16 @@ export default function StudentProfilePage() {
         if (response.ok) {
           const data = await response.json();
           setUserSession(data);
+          return data; // Return the session data
         } else {
           console.error("Failed to fetch user session:", response.status);
           setUserSession(null);
+          return null; // Return null on failure
         }
       } catch (err) {
         console.error("Error fetching user session:", err);
         setUserSession(null);
+        return null; // Return null on error
       }
     };
 
@@ -179,7 +183,7 @@ export default function StudentProfilePage() {
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userSession?.id || !messageRecipientId || !contactMessage.trim()) {
-      alert("Authentication required or missing recipient/message.");
+      toast("Authentication required or missing recipient/message.");
       return;
     }
 
@@ -201,14 +205,14 @@ export default function StudentProfilePage() {
 
       if (response.ok) {
         setShowMessageModal(false);
-        alert("Message sent successfully!");
+        toast.success("Message sent successfully!");
       } else {
         const errorData = await response.json();
-        alert(`Failed to send message: ${errorData.message || response.statusText}`);
+        toast.error(`Failed to send message: ${errorData.message || response.statusText}`);
       }
     } catch (err) {
       console.error("Error sending message:", err);
-      alert("An unexpected error occurred while sending the message.");
+      toast.error("An unexpected error occurred while sending the message.");
     } finally {
       setLoading(false);
     }
@@ -226,7 +230,7 @@ export default function StudentProfilePage() {
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userSession?.id || !studentProfile?.id || !targetListingId || !requestMessage.trim()) {
-      alert("Authentication required, student/listing not selected, or message missing.");
+      toast("Authentication required, student/listing not selected, or message missing.");
       return;
     }
 
@@ -247,15 +251,15 @@ export default function StudentProfilePage() {
 
       if (response.ok) {
         setShowRequestModal(false);
-        alert("Roommate request sent successfully!");
+        toast.success("Roommate request sent successfully!");
         // Optionally, refresh requests on the advertiser dashboard or give feedback
       } else {
         const errorData = await response.json();
-        alert(`Failed to send request: ${errorData.error || response.statusText}`);
+        toast.error(`Failed to send request: ${errorData.error || response.statusText}`);
       }
     } catch (err) {
       console.error("Error sending request:", err);
-      alert("An unexpected error occurred while sending the request.");
+      toast.error("An unexpected error occurred while sending the request.");
     } finally {
       setLoading(false);
     }

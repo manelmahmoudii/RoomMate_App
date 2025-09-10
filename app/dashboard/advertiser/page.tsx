@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from 'react-hot-toast';
 import {
   Users,
   Home,
@@ -28,7 +29,9 @@ import {
   BarChart3,
   Upload,
   Mail,
-  Bell
+  Bell,
+  ArrowLeft,
+  Camera
 } from "lucide-react"
 import Link from "next/link"
 
@@ -41,8 +44,8 @@ interface User {
   avatar_url: string;
   created_at: string;
   status: 'active' | 'suspended';
-  totalReviews?: number; // Added totalReviews
-  rating?: number; // Added rating
+  totalReviews?: number;
+  rating?: number;
   phone?: string;
   location?: string;
 }
@@ -58,8 +61,8 @@ interface Listing {
   images: string;
   status: 'pending' | 'active' | 'rejected';
   created_at: string;
-  views?: number; // Added views
-  requests?: number; // Added requests
+  views?: number;
+  requests?: number;
 }
 
 interface Request {
@@ -78,19 +81,36 @@ interface Request {
 interface Message {
   id: string;
   sender_id: string;
-  receiver_id: string;
-  listing_id?: string;
+  recipient_id: string;
   content: string;
+  listing_id: string | null;
+  announcement_id?: string | null;
   is_read: boolean;
   created_at: string;
   sender_first_name: string;
   sender_last_name: string;
   sender_avatar_url: string;
-  receiver_first_name: string;
-  receiver_last_name: string;
-  receiver_avatar_url: string;
-  listing_title?: string;
-  listing_city?: string;
+  listing_title: string | null;
+  listing_city: string | null;
+  announcement_title?: string | null;
+}
+
+interface ConversationParticipant {
+  id: string;
+  first_name: string;
+  last_name: string;
+  avatar_url: string;
+}
+
+interface Conversation {
+  id: string;
+  participant: ConversationParticipant;
+  lastMessage: Message;
+  unreadCount: number;
+  messages: Message[];
+  contextType: 'listing' | 'announcement' | 'general';
+  contextTitle: string | null;
+  contextId: string | null;
 }
 
 interface Announcement {
@@ -108,26 +128,66 @@ interface Analytics {
   totalViews: number;
   totalRequests: number;
   activeListings: number;
-  averageRating: number; // Assuming this is calculated or fetched
+  averageRating: number;
   monthlyEarnings: number;
   responseRate: number;
 }
 
+const stringToColor = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  let color = '#';
+  for (let i = 0; i < 3; i++) {
+    const value = (hash >> (i * 8)) & 0xFF;
+    color += ('00' + value.toString(16)).substr(-2);
+  }
+  return color;
+};
+
+const getAvatarDisplayUrl = (avatarUrl: string | null | undefined) => {
+  if (!avatarUrl || avatarUrl === "/placeholder.svg") {
+    return undefined;
+  }
+  return avatarUrl;
+};
+
+const getListingImageUrl = (images: string | null) => {
+  if (!images) return "/placeholder.svg";
+
+  try {
+    const imageUrls = JSON.parse(images);
+    if (Array.isArray(imageUrls) && imageUrls.length > 0) {
+      return imageUrls[0];
+    }
+  } catch (e) {
+  }
+  return images;
+};
+
+const getListingImagesArray = (imagesString: string) => {
+  try {
+    const images = JSON.parse(imagesString);
+    return (Array.isArray(images) && images.length > 0) ? images : [];
+  } catch (error) {
+    console.error("Error parsing images JSON for editing listing:", imagesString, error);
+    return [];
+  }
+};
+
 export default function AdvertiserDashboard() {
-  const [activeTab, setActiveTab] = useState("overview")
-  const [showAddListing, setShowAddListing] = useState(false)
+  const [activeTab, setActiveTab] = useState("overview");
+  const [showAddListing, setShowAddListing] = useState(false);
   const [advertiserProfile, setAdvertiserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [listings, setListings] = useState<Listing[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]); // New state for messages
+  const [messages, setMessages] = useState<Message[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [showEditListing, setShowEditListing] = useState(false);
   const [editingListing, setEditingListing] = useState<Listing | null>(null);
-  const [showSendMessageModal, setShowSendMessageModal] = useState(false); // New state for message modal
-  const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null); // New state for message recipient
-  const [messageListingId, setMessageListingId] = useState<string | null>(null); // New state for message listing
-  const [contactMessage, setContactMessage] = useState<string>(""); // New state for message content
+  const [contactMessage, setContactMessage] = useState<string>("");
   const [newListingForm, setNewListingForm] = useState({
     title: "",
     description: "",
@@ -139,170 +199,76 @@ export default function AdvertiserDashboard() {
   });
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [myAnnouncements, setMyAnnouncements] = useState<Announcement[]>([]); // New state for advertiser's announcements
+  const [myAnnouncements, setMyAnnouncements] = useState<Announcement[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [allListings, setAllListings] = useState<Listing[]>([]);
 
-  const getListingImageUrl = (imagesString: string) => {
-    try {
-      const images = JSON.parse(imagesString);
-      return (Array.isArray(images) && images.length > 0) ? images[0] : "/placeholder.svg";
-    } catch (error) {
-      console.error("Error parsing images JSON for listing:", imagesString, error);
-      return "/placeholder.svg";
-    }
-  };
+  const groupMessagesByConversation = useCallback((allMessages: Message[], currentUserId: string, allListings: Listing[], allAnnouncements: Announcement[]): Conversation[] => {
+    const conversationsMap = new Map<string, Conversation>();
 
-  const getListingImagesArray = (imagesString: string) => {
-    try {
-      const images = JSON.parse(imagesString);
-      return (Array.isArray(images) && images.length > 0) ? images : [];
-    } catch (error) {
-      console.error("Error parsing images JSON for editing listing:", imagesString, error);
-      return [];
-    }
-  };
+    allMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
-  // Mock advertiser data - will be replaced by fetched data
-  const advertiser = {
-    name: "Amira Ben Salem",
-    email: "amira.bensalem@email.com",
-    avatar: "/tunisian-woman-profile.jpg",
-    phone: "+216 XX XXX XXX",
-    accountType: "Student (Room Owner)",
-    location: "Tunis",
-    joinedDate: "March 2022",
-    verified: true,
-    rating: 4.9,
-    totalReviews: 47,
-  }
+    allMessages.forEach(message => {
+      const otherParticipantId = message.sender_id === currentUserId ? message.recipient_id : message.sender_id;
+      const conversationKey = otherParticipantId;
 
-  // Removed: Mock listings data
-  /*
-  const listings = [
-    {
-      id: 1,
-      title: "Modern Apartment in Tunis Center",
-      location: "Tunis, Bab Bhar",
-      price: 350,
-      image: "/modern-student-apartment-tunis.jpg",
-      status: "active",
-      views: 156,
-      requests: 8,
-      posted: "2 weeks ago",
-      roommates: 2,
-      rating: 4.8,
-    },
-    {
-      id: 2,
-      title: "Cozy Student Room",
-      location: "Tunis, Manouba",
-      price: 290,
-      image: "/modern-room-tunis-university.jpg",
-      status: "active",
-      views: 89,
-      requests: 5,
-      posted: "1 month ago",
-      roommates: 3,
-      rating: 4.6,
-    },
-    {
-      id: 3,
-      title: "Shared Apartment Near Campus",
-      location: "Tunis, El Manar",
-      price: 320,
-      image: "/placeholder.svg?key=campus",
-      status: "pending",
-      views: 23,
-      requests: 2,
-      posted: "3 days ago",
-      roommates: 2,
-      rating: 0,
-    },
-  ]
-  */
+      if (!conversationsMap.has(conversationKey)) {
+        const participantFirstName = (message.sender_id === currentUserId && advertiserProfile?.id === message.sender_id)
+          ? advertiserProfile.first_name
+          : message.sender_first_name || "";
+        const participantLastName = (message.sender_id === currentUserId && advertiserProfile?.id === message.sender_id)
+          ? advertiserProfile.last_name
+          : message.sender_last_name || "";
+        const participantAvatarUrl = (message.sender_id === currentUserId && advertiserProfile?.id === message.sender_id)
+          ? (advertiserProfile.avatar_url || "/placeholder.svg")
+          : message.sender_avatar_url || "/placeholder.svg";
 
-  // Removed: Mock requests data
-  /*
-  const requests = [
-    {
-      id: 1,
-      studentName: "Ahmed Ben Ali",
-      studentAvatar: "/student-woman.png",
-      listingTitle: "Modern Apartment in Tunis Center",
-      university: "University of Tunis",
-      field: "Computer Science",
-      message:
-        "Hi! I'm very interested in your room listing. I'm a quiet Computer Science student looking for a study-friendly environment...",
-      sentDate: "2 days ago",
-      status: "pending",
-      budget: 350,
-    },
-    {
-      id: 2,
-      studentName: "Sarah Mejri",
-      studentAvatar: "/placeholder.svg?key=sarah",
-      listingTitle: "Cozy Student Room",
-      university: "ESPRIT",
-      field: "Engineering",
-      message:
-        "Hello! I would love to join your student house. I'm responsible, clean, and looking for a long-term arrangement...",
-      sentDate: "1 day ago",
-      status: "pending",
-      budget: 300,
-    },
-    {
-      id: 3,
-      studentName: "Mohamed Trabelsi",
-      studentAvatar: "/placeholder.svg?key=mohamed",
-      listingTitle: "Modern Apartment in Tunis Center",
-      university: "University of Sfax",
-      field: "Medicine",
-      message: "Hi there! I'm a medical student looking for accommodation. I'm very organized and respectful...",
-      sentDate: "5 days ago",
-      status: "accepted",
-      budget: 350,
-    },
-  ]
-  */
+        conversationsMap.set(conversationKey, {
+          id: conversationKey,
+          participant: {
+            id: otherParticipantId,
+            first_name: participantFirstName,
+            last_name: participantLastName,
+            avatar_url: participantAvatarUrl,
+          },
+          lastMessage: message,
+          unreadCount: 0,
+          messages: [],
+          contextType: 'general',
+          contextTitle: null,
+          contextId: null,
+        });
+      }
 
-  // Removed: Mock analytics data
-  /*
-  const analytics = {
-    totalViews: 268,
-    totalRequests: 15,
-    activeListings: 2,
-    averageRating: 4.7,
-    monthlyEarnings: 640,
-    responseRate: 95,
-  }
-  */
+      const conversation = conversationsMap.get(conversationKey)!;
+      conversation.messages.push(message);
+      conversation.lastMessage = message;
+      if (message.recipient_id === currentUserId && !message.is_read) {
+        conversation.unreadCount++;
+      }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "active":
-        return "bg-green-100 text-green-800"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      case "inactive":
-        return "bg-gray-100 text-gray-800"
-      case "accepted":
-        return "bg-blue-100 text-blue-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
+      if (message.listing_id) {
+        const listing = allListings.find(l => l.id === message.listing_id);
+        conversation.contextType = 'listing';
+        conversation.contextId = message.listing_id;
+        conversation.contextTitle = listing?.title || message.listing_title || `Listing ${message.listing_id}`;
+      } else if (message.announcement_id) {
+        const announcement = allAnnouncements.find(a => a.id === message.announcement_id);
+        conversation.contextType = 'announcement';
+        conversation.contextId = message.announcement_id;
+        conversation.contextTitle = announcement?.title || message.announcement_title || `Announcement ${message.announcement_id}`;
+      } else {
+        conversation.contextType = 'general';
+        conversation.contextTitle = null;
+        conversation.contextId = null;
+      }
+    });
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "active":
-        return <CheckCircle className="w-4 h-4" />
-      case "pending":
-        return <Clock className="w-4 h-4" />
-      case "accepted":
-        return <CheckCircle className="w-4 h-4" />
-      default:
-        return <Clock className="w-4 h-4" />
-    }
-  }
+    return Array.from(conversationsMap.values()).sort((a, b) => 
+      new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime()
+    );
+  }, [advertiserProfile]);
 
   const fetchAdvertiserProfile = useCallback(async () => {
     setLoading(true);
@@ -324,10 +290,11 @@ export default function AdvertiserDashboard() {
   const fetchListings = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/listings"); // Assuming this fetches listings for the current user
+      const response = await fetch("/api/listings");
       if (response.ok) {
         const data = await response.json();
         setListings(data);
+        setAllListings(data);
       } else {
         console.error("Failed to fetch listings:", response.status);
       }
@@ -372,23 +339,6 @@ export default function AdvertiserDashboard() {
     }
   }, []);
 
-  const fetchMessages = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/messages");
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(data);
-      } else {
-        console.error("Failed to fetch messages:", response.status);
-      }
-    } catch (error) {
-      console.error("Error fetching messages:", error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   const fetchMyAnnouncements = useCallback(async () => {
     setLoading(true);
     try {
@@ -405,6 +355,32 @@ export default function AdvertiserDashboard() {
       setLoading(false);
     }
   }, []);
+
+  const fetchMessages = useCallback(async () => {
+    if (!advertiserProfile?.id) return;
+    setLoading(true);
+    try {
+      const response = await fetch("/api/messages");
+      if (response.ok) {
+        const data: Message[] = await response.json();
+        setMessages(data);
+        const grouped = groupMessagesByConversation(data, advertiserProfile.id, allListings, myAnnouncements);
+        setConversations(grouped);
+        if (selectedConversation) {
+          const updatedSelected = grouped.find(conv => conv.id === selectedConversation.id);
+          setSelectedConversation(updatedSelected || null);
+        }
+      } else {
+        console.error("Failed to fetch messages:", response.status);
+        toast.error("Failed to load messages.");
+      }
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      toast.error("An error occurred while fetching messages.");
+    } finally {
+      setLoading(false);
+    }
+  }, [advertiserProfile?.id, groupMessagesByConversation, allListings, myAnnouncements, selectedConversation]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -434,15 +410,15 @@ export default function AdvertiserDashboard() {
 
       if (response.ok) {
         setListings((prevListings) => prevListings.filter((listing) => listing.id !== listingId));
-        alert("Listing deleted successfully!");
-        fetchListings(); // Refresh listings after deletion
+        toast.success("Listing deleted successfully!");
+        fetchListings();
       } else {
         const errorData = await response.json();
-        alert(`Failed to delete listing: ${errorData.message || response.statusText}`);
+        toast.error(`Failed to delete listing: ${errorData.message || response.statusText}`);
       }
     } catch (error) {
       console.error("Error deleting listing:", error);
-      alert("An error occurred while deleting the listing.");
+      toast.error("An error occurred while deleting the listing.");
     } finally {
       setLoading(false);
     }
@@ -458,15 +434,15 @@ export default function AdvertiserDashboard() {
       });
 
       if (response.ok) {
-        alert("Announcement deleted successfully!");
-        fetchMyAnnouncements(); // Refresh the list
+        toast.success("Announcement deleted successfully!");
+        fetchMyAnnouncements();
       } else {
         const errorData = await response.json();
-        alert(errorData.error || "Failed to delete announcement.");
+        toast.error(errorData.error || "Failed to delete announcement.");
         console.error("Failed to delete announcement:", response.status, errorData.error);
       }
     } catch (error) {
-      alert("Error deleting announcement.");
+      toast.error("Error deleting announcement.");
       console.error("Error deleting announcement:", error);
     } finally {
       setLoading(false);
@@ -485,8 +461,6 @@ export default function AdvertiserDashboard() {
         price: parseFloat((document.getElementById("editPrice") as HTMLInputElement).value),
         city: (document.getElementById("editLocation") as HTMLSelectElement).value,
         number_of_roommates: parseInt((document.getElementById("editRoommates") as HTMLSelectElement).value),
-        // amenities and images would need more complex handling (e.g., file uploads, multi-select)
-        // For now, we'll assume they are not being updated via this simple form
       };
 
       const response = await fetch(`/api/listings/${editingListing.id}`, {
@@ -496,17 +470,17 @@ export default function AdvertiserDashboard() {
       });
 
       if (response.ok) {
-        alert("Listing updated successfully!");
+        toast.success("Listing updated successfully!");
         setShowEditListing(false);
         setEditingListing(null);
-        fetchListings(); // Refresh listings after update
+        fetchListings();
       } else {
         const errorData = await response.json();
-        alert(`Failed to update listing: ${errorData.message || response.statusText}`);
+        toast.error(`Failed to update listing: ${errorData.message || response.statusText}`);
       }
     } catch (error) {
       console.error("Error updating listing:", error);
-      alert("An error occurred while updating the listing.");
+      toast.error("An error occurred while updating the listing.");
     } finally {
       setLoading(false);
     }
@@ -532,13 +506,13 @@ export default function AdvertiserDashboard() {
           imageUrl = uploadData.imageUrl;
         } else {
           const errorData = await uploadResponse.json();
-          alert(`Failed to upload image: ${errorData.message || uploadResponse.statusText}`);
+          toast.error(`Failed to upload image: ${errorData.message || uploadResponse.statusText}`);
           setLoading(false);
           return;
         }
       } catch (error) {
         console.error("Error uploading image:", error);
-        alert("An error occurred while uploading the image.");
+        toast.error("An error occurred while uploading the image.");
         setLoading(false);
         return;
       }
@@ -555,12 +529,12 @@ export default function AdvertiserDashboard() {
           city: newListingForm.city,
           number_of_roommates: parseInt(newListingForm.number_of_roommates),
           amenities: newListingForm.amenities, 
-          images: imageUrl ? [imageUrl] : [], // Pass the uploaded image URL
+          images: imageUrl ? [imageUrl] : [],
         }),
       });
 
       if (response.ok) {
-        alert("Listing added successfully! Awaiting admin approval.");
+        toast.success("Listing added successfully! Awaiting admin approval.");
         setShowAddListing(false);
         setNewListingForm({
           title: "",
@@ -573,14 +547,14 @@ export default function AdvertiserDashboard() {
         });
         setSelectedImageFile(null);
         setImagePreview(null);
-        fetchListings(); // Refresh listings after adding new one
+        fetchListings();
       } else {
         const errorData = await response.json();
-        alert(`Failed to add listing: ${errorData.message || response.statusText}`);
+        toast.error(`Failed to add listing: ${errorData.message || response.statusText}`);
       }
     } catch (error) {
       console.error("Error adding listing:", error);
-      alert("An error occurred while adding the listing.");
+      toast.error("An error occurred while adding the listing.");
     } finally {
       setLoading(false);
     }
@@ -599,15 +573,15 @@ export default function AdvertiserDashboard() {
       });
 
       if (response.ok) {
-        alert("Request accepted successfully!");
-        fetchRequests(); // Refresh requests
+        toast.success("Request accepted successfully!");
+        fetchRequests();
       } else {
         const errorData = await response.json();
-        alert(`Failed to accept request: ${errorData.message || response.statusText}`);
+        toast.error(`Failed to accept request: ${errorData.message || response.statusText}`);
       }
     } catch (error) {
       console.error("Error accepting request:", error);
-      alert("An error occurred while accepting the request.");
+      toast.error("An error occurred while accepting the request.");
     } finally {
       setLoading(false);
     }
@@ -626,31 +600,23 @@ export default function AdvertiserDashboard() {
       });
 
       if (response.ok) {
-        alert("Request declined successfully!");
-        fetchRequests(); // Refresh requests
+        toast.success("Request declined successfully!");
+        fetchRequests();
       } else {
         const errorData = await response.json();
-        alert(`Failed to decline request: ${errorData.message || response.statusText}`);
+        toast.error(`Failed to decline request: ${errorData.message || response.statusText}`);
       }
     } catch (error) {
       console.error("Error declining request:", error);
-      alert("An error occurred while declining the request.");
+      toast.error("An error occurred while declining the request.");
     } finally {
       setLoading(false);
     }
   }, [fetchRequests]);
 
-  const handleOpenMessageModal = useCallback((recipientId: string, listingId?: string) => {
-    setMessageRecipientId(recipientId);
-    setMessageListingId(listingId || null);
-    setContactMessage(""); // Clear previous message
-    setShowSendMessageModal(true);
-    setActiveTab("messages"); // Automatically switch to messages tab
-  }, []);
-
   const handleSendMessage = useCallback(async () => {
-    if (!messageRecipientId || !contactMessage.trim()) {
-      alert("Please enter a message and select a recipient.");
+    if (!advertiserProfile?.id || !selectedConversation?.participant.id || !contactMessage.trim()) {
+      toast.error("Authentication required or missing recipient/message.");
       return;
     }
 
@@ -660,31 +626,113 @@ export default function AdvertiserDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          recipientId: messageRecipientId,
+          recipientId: selectedConversation.participant.id,
           message: contactMessage.trim(),
-          listingId: messageListingId,
+          listingId: selectedConversation.contextType === 'listing' ? selectedConversation.contextId : null,
+          announcementId: selectedConversation.contextType === 'announcement' ? selectedConversation.contextId : null,
         }),
       });
 
       if (response.ok) {
-        alert("Message sent successfully!");
+        toast.success("Message sent successfully!");
         setContactMessage("");
-        setShowSendMessageModal(false);
-        fetchMessages(); // Refresh messages after sending
+        if (advertiserProfile && selectedConversation) {
+          const newMessage: Message = {
+            id: `temp-${Date.now()}`,
+            sender_id: advertiserProfile.id,
+            recipient_id: selectedConversation.participant.id,
+            content: contactMessage,
+            listing_id: selectedConversation.contextType === 'listing' ? selectedConversation.contextId : null,
+            announcement_id: selectedConversation.contextType === 'announcement' ? selectedConversation.contextId : null,
+            is_read: true,
+            created_at: new Date().toISOString(),
+            sender_first_name: advertiserProfile.first_name || "",
+            sender_last_name: advertiserProfile.last_name || "",
+            sender_avatar_url: advertiserProfile.avatar_url || "/placeholder.svg",
+            listing_title: selectedConversation.contextType === 'listing' ? selectedConversation.contextTitle : null,
+            listing_city: selectedConversation.contextType === 'listing' ? selectedConversation.lastMessage.listing_city || null : null,
+            announcement_title: selectedConversation.contextType === 'announcement' ? selectedConversation.contextTitle : null,
+          };
+
+          setConversations(prevConversations => {
+            const updatedConversations = prevConversations.map(conv => {
+              if (conv.id === selectedConversation.id) {
+                return {
+                  ...conv,
+                  messages: [...conv.messages, newMessage],
+                  lastMessage: newMessage,
+                };
+              }
+              return conv;
+            });
+            const conversationToMove = updatedConversations.find(conv => conv.id === selectedConversation.id);
+            if (conversationToMove) {
+              return [conversationToMove, ...updatedConversations.filter(conv => conv.id !== selectedConversation.id)];
+            }
+            return updatedConversations;
+          });
+          setSelectedConversation(prev => prev ? { ...prev, messages: [...prev.messages, newMessage], lastMessage: newMessage } : null);
+        } else {
+          fetchMessages();
+        }
       } else {
         const errorData = await response.json();
-        alert(`Failed to send message: ${errorData.message || response.statusText}`);
+        toast.error(`Failed to send message: ${errorData.message || response.statusText}`);
       }
     } catch (error) {
       console.error("Error sending message:", error);
-      alert("An error occurred while sending the message.");
+      toast.error("An error occurred while sending the message.");
     } finally {
       setLoading(false);
     }
-  }, [messageRecipientId, contactMessage, messageListingId, fetchMessages]);
+  }, [advertiserProfile, selectedConversation, contactMessage, fetchMessages]);
 
-  const handleMessageStudent = useCallback(async (studentId: string, listingId: string) => {
-    handleOpenMessageModal(studentId, listingId); // Use the new modal flow
+  const handleOpenMessageModal = useCallback((recipientId: string, listingId: string | null = null, announcementId: string | null = null, recipientFirstName: string = "", recipientLastName: string = "", recipientAvatarUrl: string = "/placeholder.svg") => {
+    setContactMessage("");
+    setActiveTab("messages");
+
+    const existingConversation = conversations.find(conv => conv.participant.id === recipientId);
+
+    if (existingConversation) {
+      setSelectedConversation(existingConversation);
+    } else if (advertiserProfile) {
+      const newConversation: Conversation = {
+        id: recipientId,
+        participant: {
+          id: recipientId,
+          first_name: recipientFirstName,
+          last_name: recipientLastName,
+          avatar_url: recipientAvatarUrl,
+        },
+        lastMessage: {
+          id: `new-temp-${Date.now()}`,
+          sender_id: advertiserProfile.id,
+          recipient_id: recipientId,
+          content: "",
+          listing_id: listingId,
+          announcement_id: announcementId,
+          is_read: false,
+          created_at: new Date().toISOString(),
+          sender_first_name: advertiserProfile.first_name || "",
+          sender_last_name: advertiserProfile.last_name || "",
+          sender_avatar_url: advertiserProfile.avatar_url || "/placeholder.svg",
+          listing_title: listingId ? (allListings.find(l => l.id === listingId)?.title || `Listing ${listingId}`) : null,
+          listing_city: listingId ? (allListings.find(l => l.id === listingId)?.city || null) : null,
+          announcement_title: announcementId ? (myAnnouncements.find(a => a.id === announcementId)?.title || `Announcement ${announcementId}`) : null,
+        },
+        unreadCount: 0,
+        messages: [],
+        contextType: listingId ? 'listing' : (announcementId ? 'announcement' : 'general'),
+        contextTitle: listingId ? (allListings.find(l => l.id === listingId)?.title || `Listing ${listingId}`) : (announcementId ? (myAnnouncements.find(a => a.id === announcementId)?.title || `Announcement ${announcementId}`) : null),
+        contextId: listingId || announcementId || null,
+      };
+      setSelectedConversation(newConversation);
+      setConversations(prev => [newConversation, ...prev]);
+    }
+  }, [conversations, advertiserProfile, allListings, myAnnouncements]);
+
+  const handleMessageStudent = useCallback(async (studentId: string, listingId: string, studentFirstName: string, studentLastName: string, studentAvatarUrl: string) => {
+    handleOpenMessageModal(studentId, listingId, null, studentFirstName, studentLastName, studentAvatarUrl);
   }, [handleOpenMessageModal]);
 
   const handleEditListing = useCallback((listing: Listing) => {
@@ -697,48 +745,65 @@ export default function AdvertiserDashboard() {
     fetchListings();
     fetchRequests();
     fetchAnalytics();
-    fetchMessages(); // Fetch messages on component mount
-    fetchMyAnnouncements(); // Fetch my announcements on component mount
-  }, [fetchAdvertiserProfile, fetchListings, fetchRequests, fetchAnalytics, fetchMessages, fetchMyAnnouncements]);
+    fetchMyAnnouncements();
+  }, [fetchAdvertiserProfile, fetchListings, fetchRequests, fetchAnalytics, fetchMyAnnouncements]);
+
+  useEffect(() => {
+    if (advertiserProfile?.id && allListings.length > 0 && myAnnouncements.length > 0) {
+      fetchMessages();
+    }
+  }, [advertiserProfile?.id, allListings.length, myAnnouncements.length, fetchMessages]);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "active":
+        return "bg-green-100 text-green-800";
+      case "pending":
+        return "bg-yellow-100 text-yellow-800";
+      case "inactive":
+        return "bg-gray-100 text-gray-800";
+      case "accepted":
+        return "bg-blue-100 text-blue-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "active":
+        return <CheckCircle className="w-4 h-4" />;
+      case "pending":
+        return <Clock className="w-4 h-4" />;
+      case "accepted":
+        return <CheckCircle className="w-4 h-4" />;
+      default:
+        return <Clock className="w-4 h-4" />;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Removed Header component */}
-      {/*
-      <Header
-        title="RoomMate TN Advertiser"
-        // navLinks={[]} // Header now manages its own navigation links
-        // authButtons={false} // Header now manages its own auth buttons
-      />
-      */}
-
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar */}
           <div className="lg:w-80">
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-6">
-                  <div className="relative">
-                    <Avatar className="w-16 h-16">
-                      <AvatarImage src={advertiserProfile?.avatar_url || "/placeholder.svg"} />
-                      <AvatarFallback>
-                        {advertiserProfile?.first_name?.[0]}{advertiserProfile?.last_name?.[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    {/* Assuming verification status is part of the profile data */}
-                    {advertiserProfile?.status === 'active' && (
-                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                        <CheckCircle className="w-4 h-4 text-white" />
-                      </div>
-                    )}
-                  </div>
+                  <Avatar className="w-20 h-20">
+                    <AvatarImage src={getAvatarDisplayUrl(advertiserProfile?.avatar_url)} />
+                    <AvatarFallback 
+                      style={{ backgroundColor: advertiserProfile?.email ? stringToColor(advertiserProfile.email) : '#9ca3af' }} 
+                      className="text-white font-semibold"
+                    >
+                      {advertiserProfile?.first_name?.[0]}{advertiserProfile?.last_name?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
                   <div>
                     <h2 className="font-semibold text-foreground">{advertiserProfile?.first_name} {advertiserProfile?.last_name}</h2>
                     <p className="text-sm text-muted-foreground">{advertiserProfile?.user_type}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      {/* Assuming rating will come from analytics or a separate profile endpoint */}
                       <span className="text-sm font-medium">{advertiserProfile?.rating || 0}</span>
                       <span className="text-xs text-muted-foreground">({advertiserProfile?.totalReviews || 0})</span>
                     </div>
@@ -773,13 +838,16 @@ export default function AdvertiserDashboard() {
                   <Button
                     variant={activeTab === "messages" ? "default" : "ghost"}
                     className="w-full justify-start"
-                    onClick={() => setActiveTab("messages")}
+                    onClick={() => {
+                      setActiveTab("messages");
+                      setSelectedConversation(null);
+                    }}
                   >
                     <Mail className="w-4 h-4 mr-3" />
                     Messages
                   </Button>
                   <Button
-                    variant={activeTab === "my-announcements" ? "default" : "ghost"} // New tab for My Announcements
+                    variant={activeTab === "my-announcements" ? "default" : "ghost"}
                     className="w-full justify-start"
                     onClick={() => setActiveTab("my-announcements")}
                   >
@@ -807,9 +875,7 @@ export default function AdvertiserDashboard() {
             </Card>
           </div>
 
-          {/* Main Content */}
           <div className="flex-1">
-            {/* Overview Tab */}
             {activeTab === "overview" && (
               <div key="overview" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -820,7 +886,6 @@ export default function AdvertiserDashboard() {
                   </Button>
                 </div>
 
-                {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   <Card className="group hover:shadow-lg transition-shadow duration-300 ease-in-out">
                     <CardContent className="p-6">
@@ -897,7 +962,6 @@ export default function AdvertiserDashboard() {
                   </Card>
                 </div>
 
-                {/* Recent Activity */}
                 <Card>
                   <CardHeader>
                     <CardTitle>Recent Activity</CardTitle>
@@ -907,32 +971,31 @@ export default function AdvertiserDashboard() {
                       {loading && <p>Loading recent activity...</p>}
                       {!loading && requests.slice(0, 3).map((request, index) => (
                         <div key={index} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
-                        <MessageCircle className="w-5 h-5 text-primary" />
-                        <div>
+                          <MessageCircle className="w-5 h-5 text-primary" />
+                          <div>
                             <p className="text-sm text-foreground">New request from {request.student_first_name} {request.student_last_name}</p>
                             <p className="text-xs text-muted-foreground">{new Date(request.created_at).toLocaleDateString()}</p>
+                          </div>
                         </div>
-                      </div>
                       ))}
                       {!loading && myAnnouncements.slice(0, 3).map((announcement, index) => (
                         <div key={`announcement-${index}`} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
                           <Bell className="w-5 h-5 text-purple-500" />
-                        <div>
+                          <div>
                             <p className="text-sm text-foreground">Posted announcement: {announcement.title}</p>
                             <p className="text-xs text-muted-foreground">{new Date(announcement.created_at).toLocaleDateString()}</p>
+                          </div>
                         </div>
-                      </div>
                       ))}
                       {!loading && requests.length === 0 && myAnnouncements.length === 0 && (
                         <p className="text-muted-foreground">No recent activity.</p>
                       )}
-                        </div>
+                    </div>
                   </CardContent>
                 </Card>
-                      </div>
+              </div>
             )}
 
-            {/* My Announcements Tab */}
             {activeTab === "my-announcements" && (
               <div key="my-announcements" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -949,18 +1012,8 @@ export default function AdvertiserDashboard() {
                   {loading && <p>Loading your announcements...</p>}
                   {!loading && myAnnouncements.length > 0 ? (
                     myAnnouncements.map((announcement) => {
-                      const images = getListingImageUrl(announcement.images || "[]"); // Reusing getListingImageUrl for consistency
                       return (
                         <Card key={announcement.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
-                          <div className="relative">
-                            {images !== "/placeholder.svg" && (
-                              <img
-                                src={images}
-                                alt={announcement.title}
-                                className="w-full h-48 object-cover rounded-t-lg"
-                              />
-                            )}
-                          </div>
                           <CardContent className="p-4">
                             <h3 className="font-semibold text-foreground mb-2">{announcement.title}</h3>
                             <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{announcement.content}</p>
@@ -976,9 +1029,9 @@ export default function AdvertiserDashboard() {
                                 <Trash2 className="w-4 h-4 mr-2" />
                                 Delete
                               </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                            </div>
+                          </CardContent>
+                        </Card>
                       );
                     })
                   ) : (
@@ -995,7 +1048,6 @@ export default function AdvertiserDashboard() {
               </div>
             )}
 
-            {/* Listings Tab */}
             {activeTab === "listings" && (
               <div key="listings" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -1007,70 +1059,70 @@ export default function AdvertiserDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {listings.map((listing) => (
-                    <Card key={listing.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
-                      <div className="relative">
-                        <img
-                          src={getListingImageUrl(listing.images)} // Assuming images is an array
-                          alt={listing.title}
-                          className="w-full h-48 object-cover rounded-t-lg"
-                        />
-                        <Badge className={`absolute top-3 left-3 ${getStatusColor(listing.status)}`}>
-                          {getStatusIcon(listing.status)}
-                          {listing.status}
-                        </Badge>
-                      </div>
-
-                      <CardContent className="p-4">
-                        <h3 className="font-semibold text-foreground mb-2">{listing.title}</h3>
-                        <div className="flex items-center text-muted-foreground mb-2">
-                          <MapPin className="w-4 h-4 mr-1" />
-                          <span className="text-sm">{listing.city}</span>
+                  {listings.map((listing) => {
+                    return (
+                      <Card key={listing.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
+                        <div className="relative">
+                          <img
+                            src={getListingImageUrl(listing.images)}
+                            alt={listing.title}
+                            className="w-full h-48 object-cover rounded-t-lg"
+                          />
+                          <Badge className={`absolute top-3 left-3 ${getStatusColor(listing.status)}`}>
+                            {getStatusIcon(listing.status)}
+                            {listing.status}
+                          </Badge>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div className="text-center p-2 bg-muted/30 rounded">
-                            <p className="text-lg font-bold text-foreground">{listing.views || 0}</p>
-                            <p className="text-xs text-muted-foreground">Views</p>
+                        <CardContent className="p-4">
+                          <h3 className="font-semibold text-foreground mb-2">{listing.title}</h3>
+                          <div className="flex items-center text-muted-foreground mb-2">
+                            <MapPin className="w-4 h-4 mr-1" />
+                            <span className="text-sm">{listing.city}</span>
                           </div>
-                          <div className="text-center p-2 bg-muted/30 rounded">
-                            <p className="text-lg font-bold text-foreground">{listing.requests || 0}</p>
-                            <p className="text-xs text-muted-foreground">Requests</p>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-lg font-bold text-primary">{listing.price} TND/month</span>
-                          {/* Assuming rating will come from analytics or a separate profile endpoint */}
+                          <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="text-center p-2 bg-muted/30 rounded">
+                              <p className="text-lg font-bold text-foreground">{listing.views || 0}</p>
+                              <p className="text-xs text-muted-foreground">Views</p>
+                            </div>
+                            <div className="text-center p-2 bg-muted/30 rounded">
+                              <p className="text-lg font-bold text-foreground">{listing.requests || 0}</p>
+                              <p className="text-xs text-muted-foreground">Requests</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-lg font-bold text-primary">{listing.price} TND/month</span>
                             <div className="flex items-center gap-1">
                               <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                            <span className="text-sm">4.5</span>
+                              <span className="text-sm">4.5</span>
                             </div>
-                        </div>
+                          </div>
 
-                        <p className="text-xs text-muted-foreground mb-3">Posted {new Date(listing.created_at).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground mb-3">Posted {new Date(listing.created_at).toLocaleDateString()}</p>
 
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" className="flex-1 bg-transparent">
-                            <Eye className="w-4 h-4 mr-2" />
-                            View
-                          </Button>
-                          <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => handleEditListing(listing)}>
-                            <Edit3 className="w-4 h-4 mr-2" />
-                            Edit
-                          </Button>
-                          <Button variant="outline" size="sm" className="text-red-600 bg-transparent" onClick={() => handleListingDelete(listing.id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="flex-1 bg-transparent">
+                              <Eye className="w-4 h-4 mr-2" />
+                              View
+                            </Button>
+                            <Button variant="outline" size="sm" className="flex-1 bg-transparent" onClick={() => handleEditListing(listing)}>
+                              <Edit3 className="w-4 h-4 mr-2" />
+                              Edit
+                            </Button>
+                            <Button variant="outline" size="sm" className="text-red-600 bg-transparent" onClick={() => handleListingDelete(listing.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
-            {/* Requests Tab */}
             {activeTab === "requests" && (
               <div key="requests" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
@@ -1085,8 +1137,11 @@ export default function AdvertiserDashboard() {
                       <CardContent className="p-6">
                         <div className="flex items-start gap-4">
                           <Avatar className="w-12 h-12">
-                            <AvatarImage src={request.student_avatar_url || "/placeholder.svg"} />
-                            <AvatarFallback>
+                            <AvatarImage src={getAvatarDisplayUrl(request.student_avatar_url || undefined)} />
+                            <AvatarFallback 
+                              style={{ backgroundColor: request.student_id ? stringToColor(request.student_id) : '#9ca3af' }} 
+                              className="text-white font-semibold"
+                            >
                               {request.student_first_name?.[0]}{request.student_last_name?.[0]}
                             </AvatarFallback>
                           </Avatar>
@@ -1095,10 +1150,6 @@ export default function AdvertiserDashboard() {
                             <div className="flex items-start justify-between mb-2">
                               <div>
                                 <h3 className="font-semibold text-foreground">{request.student_first_name} {request.student_last_name}</h3>
-                                {/* <p className="text-sm text-muted-foreground">
-                                  {request.field} at {request.university}
-                                </p> */}
-                                {/* <p className="text-xs text-muted-foreground">Budget: {request.budget} TND/month</p> */}
                               </div>
                               <Badge className={`${getStatusColor(request.status)} flex items-center gap-1`}>
                                 {getStatusIcon(request.status)}
@@ -1130,14 +1181,14 @@ export default function AdvertiserDashboard() {
                                   </Button>
                                 </>
                               )}
-                              <Button variant="outline" size="sm" onClick={() => handleMessageStudent(request.student_id, request.listing_id)}>
+                              <Button variant="outline" size="sm" onClick={() => handleMessageStudent(request.student_id, request.listing_id, request.student_first_name, request.student_last_name, request.student_avatar_url)}>
                                 <MessageCircle className="w-4 h-4 mr-2" />
                                 Message
                               </Button>
                               <Link href={`/student/${request.student_id}`}>
-                              <Button variant="outline" size="sm">
-                                View Profile
-                              </Button>
+                                <Button variant="outline" size="sm">
+                                  View Profile
+                                </Button>
                               </Link>
                             </div>
                           </div>
@@ -1149,85 +1200,133 @@ export default function AdvertiserDashboard() {
               </div>
             )}
 
-            {/* Messages Tab (updated) */}
             {activeTab === "messages" && (
               <div key="messages" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <h1 className="text-3xl font-bold text-foreground">My Messages</h1>
-                  <Badge variant="secondary">{messages.length} total messages</Badge>
+                  {selectedConversation ? (
+                    <Button variant="ghost" onClick={() => setSelectedConversation(null)}>
+                      <ArrowLeft className="w-4 h-4 mr-2" /> Back to Conversations
+                    </Button>
+                  ) : (
+                    <Badge variant="secondary">{conversations.length} conversations</Badge>
+                  )}
                 </div>
 
-                {/* Message Composer / Reply Section */}
-                {messageRecipientId && ( // Show composer if a recipient is selected
-                  <Card className="mb-6">
-                    <CardHeader>
-                      <CardTitle>New Message / Reply</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <Label htmlFor="messageContent">Message to {messages.find(m => m.sender_id === messageRecipientId || m.receiver_id === messageRecipientId)?.sender_first_name || "User"}:</Label>
-                        <Textarea
-                          id="messageContent"
-                          placeholder="Type your message here..."
-                          rows={4}
-                          value={contactMessage}
-                          onChange={(e) => setContactMessage(e.target.value)}
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setShowSendMessageModal(false)} type="button">
-                          Cancel
-                        </Button>
-                        <Button onClick={handleSendMessage} disabled={loading || !contactMessage.trim()}>
-                          {loading ? "Sending..." : "Send Message"}
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                <div className="space-y-4">
-                  {loading && <p>Loading messages...</p>}
-                  {!loading && messages.length === 0 && <p className="text-muted-foreground">No messages found.</p>}
-                  {!loading && messages.map((message) => (
-                    <Card key={message.id}>
-                      <CardContent className="p-6">
-                        <div className="flex items-start gap-4">
-                          <Avatar className="w-10 h-10">
-                            <AvatarImage src={message.sender_avatar_url || "/placeholder.svg"} />
-                            <AvatarFallback>
-                              {message.sender_first_name?.[0]}{message.sender_last_name?.[0]}
+                {!selectedConversation ? (
+                  <div className="space-y-4">
+                    {loading && <p>Loading conversations...</p>}
+                    {!loading && conversations.length === 0 && <p className="text-muted-foreground">No conversations found.</p>}
+                    {!loading && conversations.map(conversation => (
+                      <Card key={conversation.id} className="hover:shadow-lg transition-shadow duration-300 ease-in-out cursor-pointer"
+                        onClick={() => setSelectedConversation(conversation)}>
+                        <CardContent className="p-4 flex items-start gap-4">
+                          <Avatar className="w-12 h-12">
+                            <AvatarImage src={getAvatarDisplayUrl(conversation.participant.avatar_url || undefined)} />
+                            <AvatarFallback 
+                              style={{ backgroundColor: conversation.participant.id ? stringToColor(conversation.participant.id) : '#9ca3af' }} 
+                              className="text-white font-semibold"
+                            >
+                              {conversation.participant.first_name?.[0]}{conversation.participant.last_name?.[0]}
                             </AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
-                            <div className="flex items-center justify-between mb-2">
-                              <h3 className="font-semibold text-foreground">{message.sender_first_name} {message.sender_last_name}</h3>
-                              <span className="text-xs text-muted-foreground">{new Date(message.created_at).toLocaleString()}</span>
-                            </div>
-                            {message.listing_title && (
-                              <p className="text-sm text-muted-foreground mb-2">Regarding: <Link href={`/listings/${message.listing_id}`} className="text-primary hover:underline">{message.listing_title} ({message.listing_city})</Link></p>
-                            )}
-                            <p className="text-sm text-foreground mb-4">{message.content}</p>
-                            <div className="flex gap-2">
-                              <Button size="sm" variant="outline" onClick={() => handleOpenMessageModal(message.sender_id, message.listing_id)}>
-                                Reply
-                              </Button>
-                              {!message.is_read && (
-                                <Button size="sm" variant="secondary">
-                                  Mark as Read
-                                </Button>
+                            <div className="flex items-center justify-between">
+                              <h3 className="font-semibold text-foreground">{conversation.participant.first_name} {conversation.participant.last_name}</h3>
+                              {conversation.unreadCount > 0 && (
+                                <Badge className="bg-primary text-primary-foreground">{conversation.unreadCount} New</Badge>
                               )}
                             </div>
+                            {conversation.contextTitle && (
+                              <p className="text-xs text-muted-foreground mb-1">Regarding: <span className="font-medium">{conversation.contextTitle}</span></p>
+                            )}
+                            <p className="text-sm text-muted-foreground line-clamp-1">{conversation.lastMessage.content}</p>
+                            <span className="text-xs text-muted-foreground mt-1 block text-right">{new Date(conversation.lastMessage.created_at).toLocaleDateString()}</span>
                           </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Avatar className="w-8 h-8">
+                            <AvatarImage src={getAvatarDisplayUrl(selectedConversation.participant.avatar_url || undefined)} />
+                            <AvatarFallback 
+                              style={{ backgroundColor: selectedConversation.participant.id ? stringToColor(selectedConversation.participant.id) : '#9ca3af' }} 
+                              className="text-white font-semibold"
+                            >
+                              {selectedConversation.participant.first_name?.[0]}{selectedConversation.participant.last_name?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{selectedConversation.participant.first_name} {selectedConversation.participant.last_name}</span>
+                          {selectedConversation.contextTitle && (
+                            <Badge variant="secondary" className="ml-2">
+                              {selectedConversation.contextType === 'listing' ? (<Home className="w-3 h-3 mr-1" />) : (<Bell className="w-3 h-3 mr-1" />)}
+                              {selectedConversation.contextTitle}
+                            </Badge>
+                          )}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar p-4">
+                        {selectedConversation.messages.map((message, index) => (
+                          <div key={message.id || index} className={`flex gap-3 ${message.sender_id === advertiserProfile?.id ? 'justify-end' : 'justify-start'}`}>
+                            {message.sender_id !== advertiserProfile?.id && (
+                              <Avatar className="w-8 h-8">
+                                <AvatarImage src={getAvatarDisplayUrl(message.sender_avatar_url || undefined)} />
+                                <AvatarFallback 
+                                  style={{ backgroundColor: message.sender_id ? stringToColor(message.sender_id) : '#9ca3af' }} 
+                                  className="text-white font-semibold"
+                                >
+                                  {message.sender_first_name?.[0]}{message.sender_last_name?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div className={`flex flex-col max-w-[70%] p-3 rounded-lg ${message.sender_id === advertiserProfile?.id ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-muted rounded-bl-none'}`}>
+                              <p className="text-sm">{message.content}</p>
+                              <span className={`text-xs mt-1 ${message.sender_id === advertiserProfile?.id ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                                {new Date(message.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            {message.sender_id === advertiserProfile?.id && (
+                              <Avatar className="w-8 h-8">
+                                <AvatarImage src={getAvatarDisplayUrl(advertiserProfile.avatar_url || undefined)} />
+                                <AvatarFallback 
+                                  style={{ backgroundColor: advertiserProfile.email ? stringToColor(advertiserProfile.email) : '#9ca3af' }} 
+                                  className="text-white font-semibold"
+                                >
+                                  {advertiserProfile.first_name?.[0]}{advertiserProfile.last_name?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="p-4">
+                        <Textarea
+                          placeholder="Type your message..."
+                          rows={3}
+                          value={contactMessage}
+                          onChange={(e) => setContactMessage(e.target.value)}
+                          className="mb-3 resize-none"
+                        />
+                        <div className="flex justify-end">
+                          <Button onClick={handleSendMessage} disabled={loading || !contactMessage.trim()}>
+                            {loading ? "Sending..." : "Send Message"}
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Analytics Tab */}
             {activeTab === "analytics" && (
               <div key="analytics" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <h1 className="text-3xl font-bold text-foreground">Analytics & Performance</h1>
@@ -1283,7 +1382,6 @@ export default function AdvertiserDashboard() {
               </div>
             )}
 
-            {/* Profile Settings Tab */}
             {activeTab === "profile" && (
               <div key="profile" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
                 <h1 className="text-3xl font-bold text-foreground">Profile Settings</h1>
@@ -1296,13 +1394,16 @@ export default function AdvertiserDashboard() {
                     <CardContent className="space-y-4">
                       <div className="flex items-center gap-4 mb-6">
                         <Avatar className="w-20 h-20">
-                          <AvatarImage src={advertiserProfile?.avatar_url || "/placeholder.svg"} />
-                          <AvatarFallback>
+                          <AvatarImage src={getAvatarDisplayUrl(advertiserProfile?.avatar_url)} />
+                          <AvatarFallback 
+                            style={{ backgroundColor: advertiserProfile?.email ? stringToColor(advertiserProfile.email) : '#9ca3af' }} 
+                            className="text-white font-semibold"
+                          >
                             {advertiserProfile?.first_name?.[0]}{advertiserProfile?.last_name?.[0]}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <h3 className="font-semibold text-foreground">{advertiserProfile?.first_name} {advertiserProfile?.last_name}</h3>
+                          <h2 className="font-semibold text-foreground">{advertiserProfile?.first_name} {advertiserProfile?.last_name}</h2>
                           <p className="text-sm text-muted-foreground">Member since {new Date(advertiserProfile?.created_at || "").toLocaleDateString()}</p>
                           {advertiserProfile?.status === 'active' && (
                             <Badge variant="secondary" className="mt-1">
@@ -1391,7 +1492,6 @@ export default function AdvertiserDashboard() {
         </div>
       </div>
 
-      {/* Add Listing Modal */}
       {showAddListing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-out opacity-0 animate-fade-in-modal">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto transform scale-95 transition-all duration-300 ease-out animate-scale-in-modal">
@@ -1400,8 +1500,8 @@ export default function AdvertiserDashboard() {
             </CardHeader>
             <CardContent className="space-y-4">
               <form onSubmit={handleAddListing}>
-              <div>
-                <Label htmlFor="title">Listing Title</Label>
+                <div>
+                  <Label htmlFor="title">Listing Title</Label>
                   <Input
                     id="title"
                     placeholder="e.g., Modern Apartment in Tunis Center"
@@ -1409,11 +1509,11 @@ export default function AdvertiserDashboard() {
                     onChange={(e) => setNewListingForm({ ...newListingForm, title: e.target.value })}
                     required
                   />
-              </div>
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="price">Monthly Rent (TND)</Label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="price">Monthly Rent (TND)</Label>
                     <Input
                       id="price"
                       type="number"
@@ -1422,9 +1522,9 @@ export default function AdvertiserDashboard() {
                       onChange={(e) => setNewListingForm({ ...newListingForm, price: e.target.value })}
                       required
                     />
-                </div>
-                <div>
-                  <Label htmlFor="roommates">Number of Roommates</Label>
+                  </div>
+                  <div>
+                    <Label htmlFor="roommates">Number of Roommates</Label>
                     <Select
                       value={newListingForm.number_of_roommates}
                       onValueChange={(value) =>
@@ -1432,21 +1532,21 @@ export default function AdvertiserDashboard() {
                       }
                       required
                     >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1</SelectItem>
-                      <SelectItem value="2">2</SelectItem>
-                      <SelectItem value="3">3</SelectItem>
-                      <SelectItem value="4">4+</SelectItem>
-                    </SelectContent>
-                  </Select>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1</SelectItem>
+                        <SelectItem value="2">2</SelectItem>
+                        <SelectItem value="3">3</SelectItem>
+                        <SelectItem value="4">4+</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <Label htmlFor="location">Location</Label>
+                <div>
+                  <Label htmlFor="location">Location</Label>
                   <Select
                     value={newListingForm.city}
                     onValueChange={(value) => setNewListingForm({ ...newListingForm, city: value })}
@@ -1463,59 +1563,58 @@ export default function AdvertiserDashboard() {
                       <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
-              </div>
+                </div>
 
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  placeholder="Describe your room/apartment, amenities, rules, etc."
-                  rows={4}
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Describe your room/apartment, amenities, rules, etc."
+                    rows={4}
                     value={newListingForm.description}
                     onChange={(e) => setNewListingForm({ ...newListingForm, description: e.target.value })}
                     required
-                />
-              </div>
-
-              <div>
-                <Label>Photos</Label>
-                <div
-                  className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-muted/30 transition-colors"
-                  onClick={() => document.getElementById("imageUpload")?.click()}
-                >
-                  <input
-                    id="imageUpload"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageChange}
                   />
-                  {imagePreview ? (
-                    <img src={imagePreview} alt="Image Preview" className="max-h-40 mx-auto mb-2 object-contain" />
-                  ) : (
-                    <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                  )}
-                  <p className="text-sm text-muted-foreground">
-                    {imagePreview ? "Click to change photo" : "Click to upload photos or drag and drop"}
-                  </p>
                 </div>
-              </div>
 
-              <div className="flex gap-2 pt-4">
+                <div>
+                  <Label>Photos</Label>
+                  <div
+                    className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-muted/30 transition-colors"
+                    onClick={() => document.getElementById("imageUpload")?.click()}
+                  >
+                    <input
+                      id="imageUpload"
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageChange}
+                    />
+                    {imagePreview ? (
+                      <img src={imagePreview} alt="Image Preview" className="max-h-40 mx-auto mb-2 object-contain" />
+                    ) : (
+                      <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      {imagePreview ? "Click to change photo" : "Click to upload photos or drag and drop"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-4">
                   <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setShowAddListing(false)} type="button">
-                  Cancel
-                </Button>
+                    Cancel
+                  </Button>
                   <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90" disabled={loading}>
                     {loading ? "Creating..." : "Create Listing"}
                   </Button>
-              </div>
+                </div>
               </form>
             </CardContent>
           </Card>
         </div>
       )}
 
-      {/* Edit Listing Modal */}
       {showEditListing && editingListing && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 transition-opacity duration-300 ease-out opacity-0 animate-fade-in-modal">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto transform scale-95 transition-all duration-300 ease-out animate-scale-in-modal">
@@ -1601,26 +1700,25 @@ export default function AdvertiserDashboard() {
 
                 <div>
                   <Label>Photos</Label>
-                  {/* Display existing images and allow new uploads */}
                   <div className="flex flex-wrap gap-2 mb-4">
                     {editingListing.images && getListingImagesArray(editingListing.images).map((image: string, index: number) => (
                       <img key={index} src={image} alt="Listing Image" className="w-24 h-24 object-cover rounded" />
                     ))}
                   </div>
-                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
-                  <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                  <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                    <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                     <p className="text-sm text-muted-foreground">Click to upload new photos or drag and drop</p>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex gap-2 pt-4">
+                <div className="flex gap-2 pt-4">
                   <Button variant="outline" className="flex-1 bg-transparent" onClick={() => setShowEditListing(false)} type="button">
-                  Cancel
-                </Button>
+                    Cancel
+                  </Button>
                   <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90" disabled={loading}>
                     {loading ? "Saving..." : "Save Changes"}
                   </Button>
-              </div>
+                </div>
               </form>
             </CardContent>
           </Card>

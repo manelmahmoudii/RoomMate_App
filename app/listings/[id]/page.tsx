@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Textarea } from "@/components/ui/textarea"
+import { toast } from 'react-hot-toast'; // Import toast
 import {
   MapPin,
   Users,
@@ -209,11 +210,11 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       } else {
         console.error("Failed to toggle favorite");
         const errorData = await response.json();
-        alert(errorData.error || "Failed to toggle favorite.");
+        toast.error(errorData.error || "Failed to toggle favorite.");
       }
     } catch (error) {
       console.error("Error toggling favorite:", error);
-      alert("An error occurred while toggling favorite.");
+      toast.error("An error occurred while toggling favorite.");
     }
   };
 
@@ -237,12 +238,12 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
         fetchListing(); // Re-fetch listing to get new comments
       } else {
         const errorData = await response.json();
-        alert(errorData.error || "Failed to post comment.");
+        toast.error(errorData.error || "Failed to post comment.");
         console.error("Failed to post comment");
       }
     } catch (error) {
       console.error("Error posting comment:", error);
-      alert("An error occurred while posting the comment.");
+      toast.error("An error occurred while posting the comment.");
     }
   };
 
@@ -253,7 +254,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
     }
     if (!message.trim()) return;
     if (!listing?.owner_id) {
-      alert("Listing owner information is missing.");
+      toast.error("Listing owner information is missing.");
       return;
     }
 
@@ -277,15 +278,15 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       if (response.ok) {
         setMessage("");
         setShowContactForm(false);
-        alert("Message sent successfully!");
+        toast.success("Message sent successfully!");
       } else {
         const errorData = await response.json();
-        alert(errorData.error || "Failed to send message!");
+        toast.error(errorData.error || "Failed to send message!");
         console.error("Failed to send message");
       }
     } catch (error) {
       console.error("Error sending message:", error);
-      alert("An error occurred while sending the message.");
+      toast.error("An error occurred while sending the message.");
     }
   };
 
@@ -302,7 +303,7 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       return;
     }
     if (!targetListingId || !requestMessage.trim()) {
-      alert("Missing listing or request message.");
+      toast("Missing listing or request message.");
       return;
     }
 
@@ -320,18 +321,18 @@ export default function ListingDetailPage({ params }: { params: { id: string } }
       });
 
       if (response.ok) {
-        alert("Roommate request sent successfully!");
+        toast.success("Roommate request sent successfully!");
         setShowRequestModal(false);
         setRequestMessage("");
         // Optionally, refetch requests for student dashboard if user navigates there
       } else {
         const errorData = await response.json();
-        alert(errorData.error || "Failed to send request.");
+        toast.error(errorData.error || "Failed to send request.");
         console.error("Failed to send request:", response.status, errorData.error);
       }
     } catch (error) {
       console.error("Error sending request:", error);
-      alert("An unexpected error occurred while sending the request.");
+      toast.error("An unexpected error occurred while sending the request.");
     } finally {
       setLoading(false);
     }

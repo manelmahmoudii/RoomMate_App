@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
   try {
     await serverLogout();
     revalidatePath('/'); // Revalidate the root path to update header state
-    return NextResponse.json({ message: "Logout successful" });
+    return NextResponse.redirect(new URL('/auth/login', request.url));
   } catch (error) {
     console.error("Error during server logout:", error);
     return NextResponse.json({ error: "Failed to logout" }, { status: 500 });

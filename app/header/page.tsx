@@ -34,6 +34,7 @@ export default function Header({
   // Removed: const [userRole, setUserRole] = useState<string | null>(null)
   
   const getDashboardPath = () => {
+    console.log("Header: Current userRole:", userRole);
     if (userRole) {
       return `/dashboard/${userRole}`;
     }
@@ -50,6 +51,7 @@ export default function Header({
   
   // Filter navigation links based on login status and role
   const filteredNavLinks = defaultNavLinks.filter(link => {
+    console.log("Header: Filtering navigation links. isLoggedIn:", isLoggedIn, "userRole:", userRole);
     if (!link.authRequired) {
       return true; // Always show public links
     }

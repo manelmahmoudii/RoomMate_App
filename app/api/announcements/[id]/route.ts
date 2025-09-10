@@ -13,6 +13,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     const announcementId = params.id;
     const userId = userSession.id;
+    const userRole = userSession.role; // Get user role
 
     if (!announcementId) {
       return NextResponse.json({ error: "Announcement ID is required" }, { status: 400 });
@@ -20,16 +21,18 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     connection = await getConnection();
 
-    // Verify that the user is the owner of the announcement
-    const [rows] = await connection.query("SELECT user_id FROM announcements WHERE id = ?", [announcementId]);
-    const announcement = (rows as any)[0];
-
-    if (!announcement) {
-      return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
-    }
-
-    if (announcement.user_id !== userId) {
-      return NextResponse.json({ error: "Unauthorized to delete this announcement" }, { status: 403 });
+    // Admins can delete any announcement, otherwise verify that the user is the owner
+    if (userRole !== 'admin') {
+      const [rows] = await connection.query("SELECT user_id FROM announcements WHERE id = ?", [announcementId]);
+      const announcement = (rows as any)[0];
+  
+      if (!announcement) {
+        return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
+      }
+  
+      if (announcement.user_id !== userId) {
+        return NextResponse.json({ error: "Unauthorized to delete this announcement" }, { status: 403 });
+      }
     }
 
     await connection.query("DELETE FROM announcements WHERE id = ?", [announcementId]);

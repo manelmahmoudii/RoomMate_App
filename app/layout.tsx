@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { GeistSans } from 'geist/font/sans'
 import { GeistMono } from 'geist/font/mono'
 import { Analytics } from '@vercel/analytics/next'
+import { Toaster } from 'react-hot-toast'; // Import Toaster
 import './globals.css'
 import { getUserSession } from '@/lib/auth' // Import auth utility
 import { cookies } from 'next/headers' // Import cookies for server-side cookie access
@@ -24,7 +25,7 @@ export default async function RootLayout({
   const userSession = await getUserSession(undefined, token);
 
   const isLoggedIn = !!userSession;
-  const userRole = userSession?.role || null;
+  const userRole = userSession?.role || ''; // Ensure userRole is always a string
   const userFirstName = userSession?.first_name || undefined;
   const userLastName = userSession?.last_name || undefined;
   const userAvatarUrl = userSession?.avatar_url || undefined;
@@ -41,6 +42,7 @@ export default async function RootLayout({
         /> {/* Use the client wrapper */}
         {children}
         <Analytics />
+        <Toaster /> {/* Add Toaster component here */}
       </body>
     </html>
   )

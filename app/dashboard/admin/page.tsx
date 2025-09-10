@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea" // Correctly import Textarea
+import { toast } from 'react-hot-toast'; // Import toast
 import {
   Users,
   Home,
@@ -28,6 +30,9 @@ import {
   Flag,
   UserCheck,
   MessageSquare,
+  Bell,
+  Mail,
+  ArrowLeft
 } from "lucide-react"
 import Link from "next/link"
 // Removed: import Header from "../../header/page"
@@ -64,8 +69,60 @@ interface Report {
   status: 'pending' | 'resolved' | 'rejected'; // Add status to Report interface
   created_at: string;
   student_first_name: string;
-  student_last_name: string;
+  last_name: string;
   listing_title: string;
+}
+
+interface Announcement {
+  id: string;
+  user_id: string;
+  title: string;
+  content: string;
+  category: string;
+  city: string | null;
+  price: number | null;
+  contact_info: string;
+  created_at: string;
+  first_name: string;
+  last_name: string;
+  university: string | null;
+  avatar_url: string | null;
+  images: string | null; // Added images field (JSON string or null)
+}
+
+interface Message {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  content: string;
+  listing_id: string | null;
+  announcement_id?: string | null;
+  is_read: boolean;
+  created_at: string;
+  sender_first_name: string;
+  sender_last_name: string;
+  sender_avatar_url: string;
+  listing_title: string | null;
+  listing_city: string | null;
+  announcement_title?: string | null;
+}
+
+interface ConversationParticipant {
+  id: string;
+  first_name: string;
+  last_name: string;
+  avatar_url: string;
+}
+
+interface Conversation {
+  id: string;
+  participant: ConversationParticipant;
+  lastMessage: Message;
+  unreadCount: number;
+  messages: Message[];
+  contextType: 'listing' | 'announcement' | 'general';
+  contextTitle: string | null;
+  contextId: string | null;
 }
 
 interface Stats {
@@ -77,6 +134,20 @@ interface Stats {
   flaggedContent: number;
   responseRate?: number;
 }
+
+// Helper function to generate a consistent color from a string
+const stringToColor = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  let color = '#';
+  for (let i = 0; i < 3; i++) {
+    const value = (hash >> (i * 8)) & 0xFF;
+    color += ('00' + value.toString(16)).substr(-2);
+  }
+  return color;
+};
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview")
@@ -91,6 +162,17 @@ export default function AdminDashboard() {
   const [selectedListingStatusFilter, setSelectedListingStatusFilter] = useState("all");
   const [selectedReportStatusFilter, setSelectedReportStatusFilter] = useState("all");
   const [adminProfile, setAdminProfile] = useState<User | null>(null);
+  const [allAnnouncements, setAllAnnouncements] = useState<Announcement[]>([]); // New state for all announcements
+  const [messages, setMessages] = useState<Message[]>([]); // New state for messages
+  const [conversations, setConversations] = useState<Conversation[]>([]); // New state for grouped conversations
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null); // New state for active conversation
+  const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
+  const [contactMessage, setContactMessage] = useState<string>("");
+  const [messageContextId, setMessageContextId] = useState<string | null>(null);
+  const [messageContextType, setMessageContextType] = useState<'listing' | 'announcement' | 'general'>('general');
+  const [messageRecipientFirstName, setMessageRecipientFirstName] = useState<string>("");
+  const [messageRecipientLastName, setMessageRecipientLastName] = useState<string>("");
+  const [messageRecipientAvatarUrl, setMessageRecipientAvatarUrl] = useState<string>("/placeholder.svg");
 
   // Mock admin data - this part can remain mostly static unless you want to fetch admin profile.
   const admin = {
@@ -170,12 +252,30 @@ export default function AdminDashboard() {
     }
   }, [selectedReportStatusFilter]);
 
+  const fetchAllAnnouncements = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/announcements"); // Assuming this fetches all announcements
+      if (response.ok) {
+        const data = await response.json();
+        setAllAnnouncements(data);
+      } else {
+        console.error("Failed to fetch all announcements:", response.status);
+      }
+    } catch (error) {
+      console.error("Error fetching all announcements:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   const fetchAdminProfile = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch("/api/auth/session");
       if (response.ok) {
         const data = await response.json();
+        console.log("Admin Profile Data:", data); // Log profile data
         setAdminProfile(data.user);
       } else {
         console.error("Failed to fetch admin profile:", response.status);
@@ -187,13 +287,240 @@ export default function AdminDashboard() {
     }
   }, []);
 
+  const groupMessagesByConversation = (allMessages: Message[], currentUserId: string, allListings: Listing[], allAnnouncements: Announcement[]): Conversation[] => {
+    const conversationsMap = new Map<string, Conversation>();
+
+    allMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    allMessages.forEach(message => {
+      const otherParticipantId = message.sender_id === currentUserId ? message.recipient_id : message.sender_id;
+      const conversationKey = otherParticipantId;
+
+      if (!conversationsMap.has(conversationKey)) {
+        const participantFirstName = message.sender_id === currentUserId && adminProfile?.first_name 
+          ? adminProfile.first_name 
+          : message.sender_first_name || "";
+        const participantLastName = message.sender_id === currentUserId && adminProfile?.last_name 
+          ? adminProfile.last_name 
+          : message.sender_last_name || "";
+        const participantAvatarUrl = message.sender_id === currentUserId && adminProfile?.avatar_url 
+          ? adminProfile.avatar_url 
+          : message.sender_avatar_url || "/placeholder.svg";
+
+        conversationsMap.set(conversationKey, {
+          id: conversationKey,
+          participant: {
+            id: otherParticipantId,
+            first_name: participantFirstName,
+            last_name: participantLastName,
+            avatar_url: participantAvatarUrl,
+          },
+          lastMessage: message,
+          unreadCount: 0,
+          messages: [],
+          contextType: 'general',
+          contextTitle: null,
+          contextId: null,
+        });
+      }
+
+      const conversation = conversationsMap.get(conversationKey)!;
+      conversation.messages.push(message);
+      conversation.lastMessage = message; // Always update last message
+      if (message.recipient_id === currentUserId && !message.is_read) {
+        conversation.unreadCount++;
+      }
+
+      if (message.listing_id) {
+        const listing = allListings.find(l => l.id === message.listing_id);
+        conversation.contextType = 'listing';
+        conversation.contextId = message.listing_id;
+        conversation.contextTitle = listing?.title || message.listing_title || `Listing ${message.listing_id}`;
+      } else if (message.announcement_id) {
+        const announcement = allAnnouncements.find(a => a.id === message.announcement_id);
+        conversation.contextType = 'announcement';
+        conversation.contextId = message.announcement_id;
+        conversation.contextTitle = announcement?.title || message.announcement_title || `Announcement ${message.announcement_id}`;
+      } else {
+        conversation.contextType = 'general';
+        conversation.contextTitle = null;
+        conversation.contextId = null;
+      }
+    });
+
+    return Array.from(conversationsMap.values()).sort((a, b) => 
+      new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime()
+    );
+  };
+
+  const fetchMessages = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/messages");
+      if (response.ok) {
+        const data: Message[] = await response.json();
+        console.log("Admin Raw Messages Data:", data); 
+        setMessages(data);
+        if (adminProfile?.id) {
+          const grouped = groupMessagesByConversation(data, adminProfile.id, listings, allAnnouncements); // Use current listings and allAnnouncements
+          setConversations(grouped);
+          if (selectedConversation) {
+            const updatedSelected = grouped.find(conv => conv.id === selectedConversation.id);
+            setSelectedConversation(updatedSelected || null);
+          }
+        }
+      } else {
+        console.error("Failed to fetch messages:", response.status);
+        toast.error("Failed to load messages.");
+      }
+    } catch (error) {
+      console.error("Error fetching messages:", error);
+      toast.error("An error occurred while fetching messages.");
+    } finally {
+      setLoading(false);
+    }
+  }, [adminProfile?.id, listings, allAnnouncements]);
+
+  const handleSendMessage = useCallback(async () => {
+    if (!adminProfile?.id || !messageRecipientId || !contactMessage.trim()) {
+      toast.error("Authentication required or missing recipient/message.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientId: messageRecipientId,
+          message: contactMessage.trim(),
+          listingId: messageContextType === 'listing' ? messageContextId : null,
+          announcementId: messageContextType === 'announcement' ? messageContextId : null,
+        }),
+      });
+
+      if (response.ok) {
+        toast.success("Message sent successfully!");
+        setContactMessage("");
+        setMessageRecipientId(null);
+        setMessageContextId(null);
+        setMessageContextType('general');
+
+        if (adminProfile && selectedConversation) {
+          const newMessage: Message = {
+            id: `temp-${Date.now()}`,
+            sender_id: adminProfile.id,
+            recipient_id: messageRecipientId,
+            content: contactMessage,
+            listing_id: selectedConversation.contextType === 'listing' ? selectedConversation.contextId : null,
+            announcement_id: selectedConversation.contextType === 'announcement' ? selectedConversation.contextId : null,
+            is_read: true,
+            created_at: new Date().toISOString(),
+            sender_first_name: adminProfile.first_name || "",
+            sender_last_name: adminProfile.last_name || "",
+            sender_avatar_url: adminProfile.avatar_url || "/placeholder.svg",
+            listing_title: selectedConversation.contextType === 'listing' ? selectedConversation.contextTitle : null,
+            listing_city: selectedConversation.contextType === 'listing' ? selectedConversation.lastMessage.listing_city : null,
+            announcement_title: selectedConversation.contextType === 'announcement' ? selectedConversation.contextTitle : null,
+          };
+
+          setConversations(prevConversations => {
+            const updatedConversations = prevConversations.map(conv => {
+              if (conv.id === selectedConversation.id) {
+                return {
+                  ...conv,
+                  messages: [...conv.messages, newMessage],
+                  lastMessage: newMessage,
+                };
+              }
+              return conv;
+            });
+            const conversationToMove = updatedConversations.find(conv => conv.id === selectedConversation.id);
+            if (conversationToMove) {
+              return [conversationToMove, ...updatedConversations.filter(conv => conv.id !== selectedConversation.id)];
+            }
+            return updatedConversations;
+          });
+          setSelectedConversation(prev => prev ? { ...prev, messages: [...prev.messages, newMessage], lastMessage: newMessage } : null);
+        } else {
+          fetchMessages();
+        }
+      } else {
+        const errorData = await response.json();
+        toast.error(`Failed to send message: ${errorData.message || response.statusText}`);
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("An error occurred while sending the message.");
+    } finally {
+      setLoading(false);
+    }
+  }, [adminProfile, messageRecipientId, contactMessage, messageContextId, messageContextType, fetchMessages, selectedConversation, listings, allAnnouncements]); // Added listings, allAnnouncements
+
+  const handleOpenMessageModal = useCallback((recipientId: string, listingId: string | null = null, announcementId: string | null = null, recipientFirstName: string = "", recipientLastName: string = "", recipientAvatarUrl: string = "/placeholder.svg") => {
+    setMessageRecipientId(recipientId);
+    setMessageContextId(listingId || announcementId || null);
+    setMessageContextType(listingId ? 'listing' : (announcementId ? 'announcement' : 'general'));
+    setContactMessage("");
+    setActiveTab("messages"); 
+    setMessageRecipientFirstName(recipientFirstName);
+    setMessageRecipientLastName(recipientLastName);
+    setMessageRecipientAvatarUrl(recipientAvatarUrl);
+
+    const existingConversation = conversations.find(conv => conv.participant.id === recipientId);
+
+    if (existingConversation) {
+      setSelectedConversation(existingConversation);
+    } else if (adminProfile) {
+      const newConversation: Conversation = {
+        id: recipientId,
+        participant: {
+          id: recipientId,
+          first_name: recipientFirstName,
+          last_name: recipientLastName,
+          avatar_url: recipientAvatarUrl,
+        },
+        lastMessage: { 
+          id: `new-temp-${Date.now()}`,
+          sender_id: adminProfile.id,
+          recipient_id: recipientId,
+          content: "",
+          listing_id: listingId,
+          announcement_id: announcementId,
+          is_read: false,
+          created_at: new Date().toISOString(),
+          sender_first_name: adminProfile.first_name || "",
+          sender_last_name: adminProfile.last_name || "",
+          sender_avatar_url: adminProfile.avatar_url || "/placeholder.svg",
+          listing_title: listingId ? (listings.find(l => l.id === listingId)?.title || `Listing ${listingId}`) : null,
+          listing_city: listingId ? (listings.find(l => l.id === listingId)?.city || null) : null,
+          announcement_title: announcementId ? (allAnnouncements.find(a => a.id === announcementId)?.title || `Announcement ${announcementId}`) : null,
+        },
+        unreadCount: 0,
+        messages: [],
+        contextType: listingId ? 'listing' : (announcementId ? 'announcement' : 'general'),
+        contextTitle: listingId ? (listings.find(l => l.id === listingId)?.title || `Listing ${listingId}`) : (announcementId ? (allAnnouncements.find(a => a.id === announcementId)?.title || `Announcement ${announcementId}`) : null),
+        contextId: listingId || announcementId || null,
+      };
+      setSelectedConversation(newConversation);
+      setConversations(prev => [newConversation, ...prev]);
+    }
+  }, [conversations, adminProfile, listings, allAnnouncements]);
+
+  const handleMessageUser = useCallback((userId: string, userFirstName: string, userLastName: string, userAvatarUrl: string) => {
+    handleOpenMessageModal(userId, null, null, userFirstName, userLastName, userAvatarUrl);
+  }, [handleOpenMessageModal]);
+
   useEffect(() => {
     fetchStats();
     fetchUsers();
     fetchListings();
     fetchReports();
+    fetchAllAnnouncements(); // Fetch all announcements for moderation
     fetchAdminProfile();
-  }, [selectedTimeRange, userTypeFilter, userStatusFilter, selectedListingStatusFilter, selectedReportStatusFilter, fetchStats, fetchUsers, fetchListings, fetchReports, fetchAdminProfile]); // Refetch when filters change
+    fetchMessages(); // Fetch messages for admin
+  }, [selectedTimeRange, userTypeFilter, userStatusFilter, selectedListingStatusFilter, selectedReportStatusFilter, fetchStats, fetchUsers, fetchListings, fetchReports, fetchAllAnnouncements, fetchAdminProfile, fetchMessages]); // Refetch when filters change or messages update
 
   // Mock platform statistics
   // const stats = {
@@ -297,6 +624,20 @@ export default function AdminDashboard() {
   //   },
   // ]
 
+  const getListingImageUrl = (images: string | null) => {
+    if (!images) return "/placeholder.svg";
+
+    try {
+      const imageUrls = JSON.parse(images);
+      if (Array.isArray(imageUrls) && imageUrls.length > 0) {
+        return imageUrls[0];
+      }
+    } catch (e) {
+      // console.error("Error parsing images (may be direct URL):", e);
+    }
+    return images;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -327,22 +668,15 @@ export default function AdminDashboard() {
     }
   }
 
-  const getListingImageUrl = (imagesString: string) => {
-    // If it's already a direct URL, return it.
-    if (typeof imagesString === 'string' && imagesString.startsWith('/')) {
-      return imagesString;
-    }
-
+  const getAnnouncementImages = (imagesString: string | null) => {
+    if (!imagesString) return [];
     try {
-      // Attempt to parse as JSON array
       const images = JSON.parse(imagesString);
-      if (Array.isArray(images) && images.length > 0) {
-        return images[0];
-      }
-    } catch (error) {
-      console.error("Error parsing images JSON or invalid image string for listing:", imagesString, error);
+      return Array.isArray(images) ? images : [];
+    } catch (e) {
+      console.error("Error parsing announcement images JSON string:", imagesString, e);
+      return [];
     }
-    return "/placeholder.svg"; // Fallback image
   };
 
   const handleUserAction = async (userId: string, action: 'suspend' | 'activate' | 'delete') => {
@@ -361,15 +695,15 @@ export default function AdminDashboard() {
       });
 
       if (response.ok) {
-        alert(`User ${action}d successfully.`);
+        toast.success(`User ${action}d successfully.`);
         fetchUsers(); // Refresh the user list
       } else {
         const errorData = await response.json();
-        alert(`Failed to ${action} user: ${errorData.error}`);
+        toast.error(`Failed to ${action} user: ${errorData.error}`);
       }
     } catch (error) {
       console.error(`Error ${action}ing user:`, error);
-      alert(`An error occurred while ${action}ing the user.`);
+      toast.error(`An error occurred while ${action}ing the user.`);
     }
   };
 
@@ -389,16 +723,16 @@ export default function AdminDashboard() {
       });
 
       if (response.ok) {
-        alert(`Listing ${action}d successfully.`);
+        toast.success(`Listing ${action}d successfully.`);
         fetchListings(); // Refresh the listing list
         fetchStats(); // Update stats as well
       } else {
         const errorData = await response.json();
-        alert(`Failed to ${action} listing: ${errorData.error}`);
+        toast.error(`Failed to ${action} listing: ${errorData.error}`);
       }
     } catch (error) {
       console.error(`Error ${action}ing listing:`, error);
-      alert(`An error occurred while ${action}ing the listing.`);
+      toast.error(`An error occurred while ${action}ing the listing.`);
     }
   };
 
@@ -418,16 +752,36 @@ export default function AdminDashboard() {
       });
 
       if (response.ok) {
-        alert(`Report ${action}d successfully.`);
+        toast.success(`Report ${action}d successfully.`);
         fetchReports(); // Refresh the reports list
         fetchStats(); // Update stats as well
       } else {
         const errorData = await response.json();
-        alert(`Failed to ${action} report: ${errorData.error}`);
+        toast.error(`Failed to ${action} report: ${errorData.error}`);
       }
     } catch (error) {
       console.error(`Error ${action}ing report:`, error);
-      alert(`An error occurred while ${action}ing the report.`);
+      toast.error(`An error occurred while ${action}ing the report.`);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (announcementId: string) => {
+    if (!confirm("Are you sure you want to delete this announcement? This action cannot be undone.")) return;
+    try {
+      const response = await fetch(`/api/announcements/${announcementId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast.success("Announcement deleted successfully.");
+        fetchAllAnnouncements(); // Refresh the announcements list
+      } else {
+        const errorData = await response.json();
+        toast.error(`Failed to delete announcement: ${errorData.error}`);
+      }
+    } catch (error) {
+      console.error(`Error deleting announcement:`, error);
+      toast.error(`An error occurred while deleting the announcement.`);
     }
   };
 
@@ -451,7 +805,12 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-4 mb-6">
                   <Avatar className="w-16 h-16">
                     <AvatarImage src={adminProfile?.avatar_url || "/placeholder.svg"} />
-                    <AvatarFallback>AD</AvatarFallback>
+                    <AvatarFallback 
+                      style={{ backgroundColor: adminProfile?.email ? stringToColor(adminProfile.email) : '#9ca3af' }} 
+                      className="text-white font-semibold"
+                    >
+                      {adminProfile?.first_name?.[0]}{adminProfile?.last_name?.[0]}
+                    </AvatarFallback>
                   </Avatar>
                   <div>
                     <h2 className="font-semibold text-foreground">{adminProfile?.first_name} {adminProfile?.last_name}</h2>
@@ -492,6 +851,25 @@ export default function AdminDashboard() {
                   >
                     <Flag className="w-4 h-4 mr-3" />
                     Reports & Flags
+                  </Button>
+                  <Button
+                    variant={activeTab === "announcements" ? "default" : "ghost"} // New tab for Announcements Moderation
+                    className="w-full justify-start"
+                    onClick={() => setActiveTab("announcements")}
+                  >
+                    <Bell className="w-4 h-4 mr-3" />
+                    Announcements Moderation
+                  </Button>
+                  <Button
+                    variant={activeTab === "messages" ? "default" : "ghost"}
+                    className="w-full justify-start"
+                    onClick={() => {
+                      setActiveTab("messages");
+                      setSelectedConversation(null); // Clear selected conversation when navigating to messages tab
+                    }}
+                  >
+                    <Mail className="w-4 h-4 mr-3" />
+                    Messages
                   </Button>
                   <Button
                     variant={activeTab === "analytics" ? "default" : "ghost"}
@@ -652,6 +1030,49 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {/* Announcements Moderation Tab */}
+            {activeTab === "announcements" && (
+              <div key="announcements" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
+                <h1 className="text-3xl font-bold text-foreground">Announcements Moderation</h1>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {loading && <p>Loading announcements...</p>}
+                  {!loading && allAnnouncements.length > 0 ? (
+                    allAnnouncements.map((announcement) => (
+                      <Card key={announcement.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
+                        <div className="relative">
+                          {/* Removed: Image display for announcements */}
+                        </div>
+                        <CardContent className="p-4">
+                          <h3 className="font-semibold text-foreground mb-2">{announcement.title}</h3>
+                          <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{announcement.content}</p>
+                          <Badge variant="secondary" className="mb-3">{announcement.category}</Badge>
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Posted: {new Date(announcement.created_at).toLocaleDateString()}</span>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleDeleteAnnouncement(announcement.id)}
+                              className="hover:scale-105 transition-transform duration-200"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="col-span-full text-center py-12">
+                      <Bell className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-medium text-foreground mb-2">No announcements to moderate</h3>
+                      <p className="text-muted-foreground mb-4">All announcements are currently in order.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Users Tab */}
             {activeTab === "users" && (
               <div key="users" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
@@ -689,14 +1110,19 @@ export default function AdminDashboard() {
 
                 <div className="space-y-4">
                   {loading && <p>Loading users...</p>}
-                  {!loading && users.map((user) => (
+                  {!loading && users.map((user) => {
+                    console.log("User data for avatar in Admin Dashboard:", user);
+                    return (
                     <Card key={user.id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
                       <CardContent className="p-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">
                             <Avatar className="w-12 h-12">
                               <AvatarImage src={user.avatar_url || "/placeholder.svg"} />
-                              <AvatarFallback>
+                              <AvatarFallback 
+                                style={{ backgroundColor: user.email ? stringToColor(user.email) : '#9ca3af' }} 
+                                className="text-white font-semibold"
+                              >
                                 {user.first_name?.[0]}{user.last_name?.[0]}
                               </AvatarFallback>
                             </Avatar>
@@ -718,6 +1144,10 @@ export default function AdminDashboard() {
                               <Button variant="outline" size="sm">
                                 <Eye className="w-4 h-4 mr-2" />
                                 View
+                              </Button>
+                              <Button variant="outline" size="sm" onClick={() => handleMessageUser(user.id, user.first_name, user.last_name, user.avatar_url)}>
+                                <MessageSquare className="w-4 h-4 mr-2" />
+                                Message
                               </Button>
                               {user.status === "active" ? (
                                 <Button
@@ -748,7 +1178,7 @@ export default function AdminDashboard() {
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                  )})}
                 </div>
               </div>
             )}
@@ -774,7 +1204,9 @@ export default function AdminDashboard() {
 
                 <div className="space-y-4">
                   {loading && <p>Loading listings...</p>}
-                  {!loading && listings.map((listing) => (
+                  {!loading && listings.map((listing) => {
+                    console.log("Listing images string for admin dashboard:", listing.images);
+                    return (
                     <Card key={listing.id} className={`group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out ${listing.status === 'pending' ? "border-yellow-200" : ""}`}>
                       <CardContent className="p-6">
                         <div className="flex gap-4">
@@ -829,7 +1261,7 @@ export default function AdminDashboard() {
                         </div>
                       </CardContent>
                     </Card>
-                  ))}
+                  )})}
                 </div>
               </div>
             )}
@@ -862,7 +1294,7 @@ export default function AdminDashboard() {
                         <div className="flex items-start justify-between mb-4">
                           <div>
                             <h3 className="font-semibold text-foreground">{report.listing_title || "N/A"}</h3>
-                            <p className="text-sm text-muted-foreground">Reported by {report.student_first_name} {report.student_last_name}</p>
+                            <p className="text-sm text-muted-foreground">Reported by {report.student_first_name} {report.last_name}</p>
                             <p className="text-xs text-muted-foreground">{new Date(report.created_at).toLocaleDateString()}</p>
                           </div>
                           <div className="flex gap-2">
@@ -901,6 +1333,137 @@ export default function AdminDashboard() {
                     </Card>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Messages Tab */}
+            {activeTab === "messages" && (
+              <div key="messages" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <h1 className="text-3xl font-bold text-foreground">Messages</h1>
+                  {selectedConversation ? (
+                    <Button variant="ghost" onClick={() => setSelectedConversation(null)}>
+                      <ArrowLeft className="w-4 h-4 mr-2" /> Back to Conversations
+                    </Button>
+                  ) : (
+                    <Badge variant="secondary">{conversations.length} conversations</Badge>
+                  )}
+                </div>
+
+                {!selectedConversation ? (
+                  // Conversation List View
+                  <div className="space-y-4">
+                    {loading && <p>Loading conversations...</p>}
+                    {!loading && conversations.length === 0 && <p className="text-muted-foreground">No conversations found.</p>}
+                    {!loading && conversations.map(conversation => (
+                      <Card key={conversation.id} className="hover:shadow-lg transition-shadow duration-300 ease-in-out cursor-pointer"
+                        onClick={() => setSelectedConversation(conversation)}>
+                        <CardContent className="p-4 flex items-start gap-4">
+                          <Avatar className="w-12 h-12">
+                            <AvatarImage src={conversation.participant.avatar_url || "/placeholder.svg"} />
+                            <AvatarFallback 
+                              style={{ backgroundColor: conversation.participant.id ? stringToColor(conversation.participant.id) : '#9ca3af' }} 
+                              className="text-white font-semibold"
+                            >
+                              {conversation.participant.first_name?.[0]}{conversation.participant.last_name?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <h3 className="font-semibold text-foreground">{conversation.participant.first_name} {conversation.participant.last_name}</h3>
+                              {conversation.unreadCount > 0 && (
+                                <Badge className="bg-primary text-primary-foreground">{conversation.unreadCount} New</Badge>
+                              )}
+                            </div>
+                            {conversation.contextTitle && (
+                              <p className="text-xs text-muted-foreground mb-1">Regarding: <span className="font-medium">{conversation.contextTitle}</span></p>
+                            )}
+                            <p className="text-sm text-muted-foreground line-clamp-1">{conversation.lastMessage.content}</p>
+                            <span className="text-xs text-muted-foreground mt-1 block text-right">{new Date(conversation.lastMessage.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  // Selected Conversation Detail View
+                  <div className="space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <Avatar className="w-8 h-8">
+                            <AvatarImage src={selectedConversation.participant.avatar_url || "/placeholder.svg"} />
+                            <AvatarFallback 
+                              style={{ backgroundColor: selectedConversation.participant.id ? stringToColor(selectedConversation.participant.id) : '#9ca3af' }} 
+                              className="text-white font-semibold"
+                            >
+                              {selectedConversation.participant.first_name?.[0]}{selectedConversation.participant.last_name?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span>{selectedConversation.participant.first_name} {selectedConversation.participant.last_name}</span>
+                          {selectedConversation.contextTitle && (
+                            <Badge variant="secondary" className="ml-2">
+                              {selectedConversation.contextType === 'listing' ? (<Home className="w-3 h-3 mr-1" />) : (<Bell className="w-3 h-3 mr-1" />)}
+                              {selectedConversation.contextTitle}
+                            </Badge>
+                          )}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar p-4">
+                        {selectedConversation.messages.map((message, index) => (
+                          <div key={message.id || index} className={`flex gap-3 ${message.sender_id === adminProfile?.id ? 'justify-end' : 'justify-start'}`}>
+                            {message.sender_id !== adminProfile?.id && (
+                              <Avatar className="w-8 h-8">
+                                <AvatarImage src={message.sender_avatar_url || "/placeholder.svg"} />
+                                <AvatarFallback 
+                                  style={{ backgroundColor: message.sender_id ? stringToColor(message.sender_id) : '#9ca3af' }} 
+                                  className="text-white font-semibold"
+                                >
+                                  {message.sender_first_name?.[0]}{message.sender_last_name?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div className={`flex flex-col max-w-[70%] p-3 rounded-lg ${message.sender_id === adminProfile?.id ? 'bg-primary text-primary-foreground rounded-br-none' : 'bg-muted rounded-bl-none'}`}>
+                              <p className="text-sm">{message.content}</p>
+                              <span className={`text-xs mt-1 ${message.sender_id === adminProfile?.id ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+                                {new Date(message.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            {message.sender_id === adminProfile?.id && (
+                              <Avatar className="w-8 h-8">
+                                <AvatarImage src={adminProfile.avatar_url || "/placeholder.svg"} />
+                                <AvatarFallback 
+                                  style={{ backgroundColor: adminProfile.email ? stringToColor(adminProfile.email) : '#9ca3af' }} 
+                                  className="text-white font-semibold"
+                                >
+                                  {adminProfile.first_name?.[0]}{adminProfile.last_name?.[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+
+                    {/* Message Input for selected conversation */}
+                    <Card>
+                      <CardContent className="p-4">
+                        <Textarea
+                          placeholder="Type your message..."
+                          rows={3}
+                          value={contactMessage}
+                          onChange={(e) => setContactMessage(e.target.value)}
+                          className="mb-3 resize-none"
+                        />
+                        <div className="flex justify-end">
+                          <Button onClick={handleSendMessage} disabled={loading || !contactMessage.trim()}>
+                            {loading ? "Sending..." : "Send Message"}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </div>
             )}
 

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { toast } from 'react-hot-toast'; // Import toast
 import {
   Users,
   Plus,
@@ -87,8 +88,6 @@ export default function AnnouncementsPage() {
       email: "",
       phone: ""
     },
-    imageFile: null as File | null, // Corrected type and initial value
-    imagePreview: null as string | null, // Corrected type and initial value
   })
   const [showSendMessageModal, setShowSendMessageModal] = useState(false); // New state for message modal
   const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null); // New state for message recipient
@@ -148,38 +147,39 @@ export default function AnnouncementsPage() {
     e.preventDefault()
     
     if (!user) {
-      alert("Please log in to create an announcement")
+      toast("Please log in to create an announcement")
       return
     }
 
     setLoading(true);
-    let imageUrl: string | null = null;
-    if (newAnnouncement.imageFile) {
-      const formData = new FormData();
-      formData.append("file", newAnnouncement.imageFile);
-
-      try {
-        const uploadResponse = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (uploadResponse.ok) {
-          const uploadData = await uploadResponse.json();
-          imageUrl = uploadData.imageUrl;
-        } else {
-          const errorData = await uploadResponse.json();
-          alert(`Failed to upload image: ${errorData.message || uploadResponse.statusText}`);
-          setLoading(false);
-          return;
-        }
-      } catch (error) {
-        console.error("Error uploading image:", error);
-        alert("An error occurred while uploading the image.");
-        setLoading(false);
-        return;
-      }
-    }
+    // Removed image upload logic
+    // let imageUrl: string | null = null;
+    // if (newAnnouncement.imageFile) {
+    //   const formData = new FormData();
+    //   formData.append("file", newAnnouncement.imageFile);
+    //
+    //   try {
+    //     const uploadResponse = await fetch("/api/upload", {
+    //       method: "POST",
+    //       body: formData,
+    //     });
+    //
+    //     if (uploadResponse.ok) {
+    //       const uploadData = await uploadResponse.json();
+    //       imageUrl = uploadData.imageUrl;
+    //     } else {
+    //       const errorData = await uploadResponse.json();
+    //       alert(`Failed to upload image: ${errorData.message || uploadResponse.statusText}`);
+    //       setLoading(false);
+    //       return;
+    //     }
+    //   } catch (error) {
+    //     console.error("Error uploading image:", error);
+    //     alert("An error occurred while uploading the image.");
+    //     setLoading(false);
+    //     return;
+    //   }
+    // }
 
     try {
       const response = await fetch("/api/announcements", {
@@ -195,7 +195,7 @@ export default function AnnouncementsPage() {
           location: newAnnouncement.location,
           price: newAnnouncement.price ? parseFloat(newAnnouncement.price) : null,
           contactInfo: newAnnouncement.contactInfo,
-          images: imageUrl ? [imageUrl] : [], // Include image URL
+          // Removed: images: imageUrl ? [imageUrl] : [], // Exclude image URL
         })
       })
 
@@ -208,16 +208,16 @@ export default function AnnouncementsPage() {
           location: "",
           price: "",
           contactInfo: { email: "", phone: "" },
-          imageFile: null,
-          imagePreview: null,
+          // Removed: imageFile: null,
+          // Removed: imagePreview: null,
         })
         fetchAnnouncements() // Recharger les annonces
       } else {
-        alert("Error creating announcement")
+        toast.error("Error creating announcement")
       }
     } catch (error) {
       console.error("Error creating announcement:", error)
-      alert("Error creating announcement")
+      toast.error("Error creating announcement")
     } finally {
       setLoading(false);
     }
@@ -232,7 +232,7 @@ export default function AnnouncementsPage() {
 
   const handleSendMessage = async () => {
     if (!messageRecipientId || !contactMessage.trim()) {
-      alert("Please enter a message and select a recipient.");
+      toast("Please enter a message and select a recipient.");
       return;
     }
 
@@ -249,16 +249,16 @@ export default function AnnouncementsPage() {
       });
 
       if (response.ok) {
-        alert("Message sent successfully!");
+        toast.success("Message sent successfully!");
         setContactMessage("");
         setShowSendMessageModal(false);
       } else {
         const errorData = await response.json();
-        alert(`Failed to send message: ${errorData.message || response.statusText}`);
+        toast.error(`Failed to send message: ${errorData.message || response.statusText}`);
       }
     } catch (error) {
       console.error("Error sending message:", error);
-      alert("An error occurred while sending the message.");
+      toast.error("An error occurred while sending the message.");
     } finally {
       setLoading(false);
     }
@@ -474,75 +474,110 @@ export default function AnnouncementsPage() {
             <CardHeader>
               <CardTitle>Create New Announcement</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6"> {/* Increased spacing between major sections */}
               <form onSubmit={handleCreateAnnouncement}>
-                <Input
-                  placeholder="Announcement title..."
-                  value={newAnnouncement.title}
-                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
-                  className="mb-4"
-                  required
-                />
-
-                <Select
-                  value={newAnnouncement.category}
-                  onValueChange={(value) => setNewAnnouncement({ ...newAnnouncement, category: value })}
-                  required
-                >
-                  <SelectTrigger className="w-full mb-4"> {/* className moved to SelectTrigger */}
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((category) => (
-                      <SelectItem key={category.value} value={category.value}>
-                        {category.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Textarea
-                  placeholder="Write your announcement..."
-                  rows={4}
-                  value={newAnnouncement.content}
-                  onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
-                  className="mb-4"
-                  required
-                />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div className="mb-4"> {/* Add margin-bottom for spacing */}
+                  <Label htmlFor="announcementTitle" className="block text-sm font-medium text-foreground mb-1">Title</Label>
                   <Input
-                    placeholder="Location (optional)"
-                    value={newAnnouncement.location}
-                    onChange={(e) => setNewAnnouncement({ ...newAnnouncement, location: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Price (optional)"
-                    type="number"
-                    value={newAnnouncement.price}
-                    onChange={(e) => setNewAnnouncement({ ...newAnnouncement, price: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Email for contact"
-                    type="email"
-                    value={newAnnouncement.contactInfo.email}
-                    onChange={(e) => setNewAnnouncement({ 
-                      ...newAnnouncement, 
-                      contactInfo: { ...newAnnouncement.contactInfo, email: e.target.value } 
-                    })}
-                  />
-                  <Input
-                    placeholder="Phone (optional)"
-                    value={newAnnouncement.contactInfo.phone}
-                    onChange={(e) => setNewAnnouncement({ 
-                      ...newAnnouncement, 
-                      contactInfo: { ...newAnnouncement.contactInfo, phone: e.target.value } 
-                    })}
+                    id="announcementTitle"
+                    placeholder="A catchy title for your announcement..."
+                    value={newAnnouncement.title}
+                    onChange={(e) => setNewAnnouncement({ ...newAnnouncement, title: e.target.value })}
+                    required
+                    className="border-input"
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="announcementImage">Announcement Image (Optional)</Label>
+                <div className="mb-4"> {/* Add margin-bottom for spacing */}
+                  <Label htmlFor="announcementCategory" className="block text-sm font-medium text-foreground mb-1">Category</Label>
+                  <Select
+                    value={newAnnouncement.category}
+                    onValueChange={(value) => setNewAnnouncement({ ...newAnnouncement, category: value })}
+                    required
+                  >
+                    <SelectTrigger id="announcementCategory" className="w-full border border-input"> {/* Ensure border is visible */}
+                      <SelectValue placeholder="Select a category for your announcement" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category.value} value={category.value}>
+                          {category.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="mb-4"> {/* Add margin-bottom for spacing */}
+                  <Label htmlFor="announcementContent" className="block text-sm font-medium text-foreground mb-1">Content</Label>
+                  <Textarea
+                    id="announcementContent"
+                    placeholder="Write the full details of your announcement here..."
+                    rows={4}
+                    value={newAnnouncement.content}
+                    onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
+                    required
+                    className="border-input"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"> {/* Add margin-bottom for spacing */}
+                  <div>
+                    <Label htmlFor="announcementLocation" className="block text-sm font-medium text-foreground mb-1">Location (Optional)</Label>
+                    <Input
+                      id="announcementLocation"
+                      placeholder="e.g., Tunis, El Manar (campus/city)"
+                      value={newAnnouncement.location}
+                      onChange={(e) => setNewAnnouncement({ ...newAnnouncement, location: e.target.value })}
+                      className="border-input"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="announcementPrice" className="block text-sm font-medium text-foreground mb-1">Price (Optional)</Label>
+                    <Input
+                      id="announcementPrice"
+                      placeholder="e.g., 250 (TND per month/item)"
+                      type="number"
+                      value={newAnnouncement.price}
+                      onChange={(e) => setNewAnnouncement({ ...newAnnouncement, price: e.target.value })}
+                      className="border-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4"> {/* Add margin-bottom for spacing */}
+                  <div>
+                    <Label htmlFor="contactEmail" className="block text-sm font-medium text-foreground mb-1">Email for contact (Optional)</Label>
+                    <Input
+                      id="contactEmail"
+                      placeholder="your.email@example.com"
+                      type="email"
+                      value={newAnnouncement.contactInfo.email}
+                      onChange={(e) => setNewAnnouncement({
+                        ...newAnnouncement,
+                        contactInfo: { ...newAnnouncement.contactInfo, email: e.target.value }
+                      })}
+                      className="border-input"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="contactPhone" className="block text-sm font-medium text-foreground mb-1">Phone (Optional)</Label>
+                    <Input
+                      id="contactPhone"
+                      placeholder="+216 12 345 678"
+                      value={newAnnouncement.contactInfo.phone}
+                      onChange={(e) => setNewAnnouncement({
+                        ...newAnnouncement,
+                        contactInfo: { ...newAnnouncement.contactInfo, phone: e.target.value }
+                      })}
+                      className="border-input"
+                    />
+                  </div>
+                </div>
+
+                {/* Removed: Image Upload Section */}
+                {/* <div>
+                  <Label htmlFor="announcementImage" className="block text-sm font-medium text-foreground mb-1">Announcement Image (Optional)</Label>
                   <div
                     className="border-2 border-dashed border-border rounded-lg p-8 text-center cursor-pointer hover:bg-muted/30 transition-colors"
                     onClick={() => document.getElementById("announcement-image-upload-form")?.click()}
@@ -575,7 +610,7 @@ export default function AnnouncementsPage() {
                       {newAnnouncement.imagePreview ? "Click to change image" : "Click to upload an image or drag and drop"}
                     </p>
                   </div>
-                </div>
+                </div> */}
 
                 <div className="flex gap-2 pt-4">
                   <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90" disabled={loading}>
