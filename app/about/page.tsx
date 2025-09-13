@@ -16,8 +16,8 @@ export default function AboutPage() {
         <div className="absolute inset-0 bg-[url('/vibrant-tunisian-students-studying-together-in-mod.jpg')] bg-cover bg-center opacity-10"></div>
         <div className="relative container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-4xl mx-auto">
-            <Badge className="mb-6 px-6 py-3 text-base font-medium animate-scale-in bg-primary/20 text-primary border-primary/30 hover:bg-primary/30 smooth-transition">
-              <span className="text-2xl mr-3">🇹🇳</span>
+          <Badge className="mb-6 px-6 py-3 text-base font-medium animate-scale-in bg-primary/20 text-primary border-primary/30 hover:bg-primary/30 smooth-transition">
+              <img src="/tn.png" alt="Tunisian Flag" className="w-6 h-6 inline-block mr-3" />
               Made for Tunisian Students
             </Badge>
 
