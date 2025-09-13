@@ -16,7 +16,6 @@ import {
   MessageCircle,
   Settings,
   Search,
-  MapPin,
   Star,
   Clock,
   CheckCircle,
@@ -30,9 +29,12 @@ import {
   Plus,
   Mail, // Import Mail icon
   ArrowLeft, // Import ArrowLeft icon
-  Home, // Import Home icon
+  Home,
+  MapPin, // Import Home icon
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation";
+import { fetchWithAuth } from "@/lib/fetchWithAuth";
 
 interface StudentProfile {
   id: string;
@@ -49,7 +51,6 @@ interface StudentProfile {
   preferences?: { 
     budget?: number;
     gender?: string;
-    location?: string;
     maxRoommates?: number;
     furnished?: boolean;
     wifi?: boolean;
@@ -109,6 +110,9 @@ interface Message {
   listing_title: string | null;
   listing_city: string | null;
   announcement_title?: string | null; // New: Title of the associated announcement
+  receiver_first_name: string; // Added
+  receiver_last_name: string; // Added
+  receiver_avatar_url: string; // Added
 }
 
 interface ConversationParticipant {
@@ -173,27 +177,38 @@ export default function StudentDashboard() {
   const [messageRecipientAvatarUrl, setMessageRecipientAvatarUrl] = useState<string>("/placeholder.svg");
   const [allListings, setAllListings] = useState<SavedListing[]>([]);
   const [myAnnouncements, setMyAnnouncements] = useState<Announcement[]>([]);
+  const [editedFirstName, setEditedFirstName] = useState("");
+  const [editedLastName, setEditedLastName] = useState("");
+  const [editedPhone, setEditedPhone] = useState("");
+  const [editedBio, setEditedBio] = useState("");
+  const [editedUniversity, setEditedUniversity] = useState("");
+  const [editedStudyLevel, setEditedStudyLevel] = useState("");
+  const [editedPreferences, setEditedPreferences] = useState<StudentProfile["preferences"]>({});
+  const [editedAvatarUrl, setEditedAvatarUrl] = useState<string | null>(null);
+
+  const router = useRouter();
 
   const groupMessagesByConversation = useCallback((allMessages: Message[], currentUserId?: string | null): Conversation[] => {
-    if (!currentUserId) return [];
+    if (!currentUserId || allMessages.length === 0) return []; // Return empty array if no messages
 
     const conversationsMap = new Map<string, Conversation>();
 
     allMessages.forEach(message => {
       const otherParticipantId = message.sender_id === currentUserId ? message.recipient_id : message.sender_id;
       
-      // Conversation key is now solely based on the other participant's ID
-      const conversationKey = otherParticipantId;
+      // Conversation key is now based on the other participant's ID AND the context (listing/announcement)
+      const contextPrefix = message.listing_id ? `L-${message.listing_id}-` : message.announcement_id ? `A-${message.announcement_id}-` : `G-`;
+      const conversationKey = `${contextPrefix}${otherParticipantId}`;
 
       if (!conversationsMap.has(conversationKey)) {
-        const participantFirstName = message.sender_id === currentUserId && studentProfile?.first_name 
-          ? studentProfile.first_name 
+        const participantFirstName = message.sender_id === currentUserId 
+          ? message.receiver_first_name || "" 
           : message.sender_first_name || "";
-        const participantLastName = message.sender_id === currentUserId && studentProfile?.last_name 
-          ? studentProfile.last_name 
+        const participantLastName = message.sender_id === currentUserId 
+          ? message.receiver_last_name || "" 
           : message.sender_last_name || "";
-        const participantAvatarUrl = message.sender_id === currentUserId && studentProfile?.avatar_url 
-          ? studentProfile.avatar_url 
+        const participantAvatarUrl = message.sender_id === currentUserId 
+          ? message.receiver_avatar_url || "/placeholder.svg" 
           : message.sender_avatar_url || "/placeholder.svg";
 
         conversationsMap.set(conversationKey, {
@@ -249,16 +264,24 @@ export default function StudentDashboard() {
     return Array.from(conversationsMap.values()).sort((a, b) => 
       new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime()
     );
-  }, [studentProfile]); // Depend on studentProfile to access its properties within the callback
+  }, [studentProfile, allListings, myAnnouncements]); // Depend on studentProfile, allListings, and myAnnouncements
 
   const fetchStudentProfile = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/auth/session");
+      const response = await fetchWithAuth(router, "/api/profile");
       if (response.ok) {
         const data = await response.json();
         console.log("Student Profile Data:", data); // Log profile data
         setStudentProfile(data);
+        setEditedFirstName(data.first_name || "");
+        setEditedLastName(data.last_name || "");
+        setEditedPhone(data.phone || "");
+        setEditedBio(data.bio || "");
+        setEditedUniversity(data.university || "");
+        setEditedStudyLevel(data.study_level || "");
+        setEditedPreferences(data.preferences || {});
+        setEditedAvatarUrl(data.avatar_url || null);
       } else {
         console.error("Failed to fetch student profile:", response.status);
       }
@@ -267,7 +290,7 @@ export default function StudentDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   const fetchSavedListings = useCallback(async () => {
     setLoading(true);
@@ -348,10 +371,17 @@ export default function StudentDashboard() {
       const response = await fetch("/api/messages");
       if (response.ok) {
         const data: Message[] = await response.json();
-        console.log("Student Messages Data:", data); // Log messages data
+        console.log("RAW Messages from API (Student Dashboard):", data); // Debug log
         setMessages(data); // Store all messages in a single state
+        // Group messages into conversations here
         const grouped = groupMessagesByConversation(data, studentProfile?.id);
-        setConversations(grouped); // Update conversations state
+        console.log("Grouped Conversations (Student Dashboard):", grouped); // Debug log
+        setConversations(grouped);
+
+        // If the currently selected conversation no longer exists in the grouped list, deselect it
+        if (selectedConversation && !grouped.some(conv => conv.id === selectedConversation.id)) {
+          setSelectedConversation(null);
+        }
       } else {
         console.error("Failed to fetch messages:", response.status);
       }
@@ -361,6 +391,11 @@ export default function StudentDashboard() {
       setLoading(false);
     }
   }, [studentProfile?.id, groupMessagesByConversation]); // Depend on studentProfile.id and groupMessagesByConversation
+
+  // New function to refresh all messages
+  const refreshMessages = useCallback(() => {
+    fetchMessages();
+  }, [fetchMessages]);
 
   const handleDeleteAnnouncement = useCallback(async (announcementId: string) => {
     if (!window.confirm("Are you sure you want to delete this announcement?")) return;
@@ -395,16 +430,25 @@ export default function StudentDashboard() {
         body: JSON.stringify({ listingId }),
       });
       if (response.ok) {
-        const data = await response.json();
-        console.log(data.message);
-        fetchSavedListings(); // Re-fetch saved listings to update UI
+        const { message, favorited } = await response.json();
+        toast.success(message);
+        if (favorited) {
+          // If favorited, add the listing to savedListings (optimistic update)
+          const listingToAdd = allListings.find(l => l.listing_id === listingId);
+          if (listingToAdd) {
+            setSavedListings(prev => [...prev, { ...listingToAdd, favorite_id: "temp-fav-id" }]); // Add a temporary favorite_id
+          }
+        } else {
+          // If unfavorited, remove the listing from savedListings (optimistic update)
+          setSavedListings(prev => prev.filter(sl => sl.listing_id !== listingId));
+        }
       } else {
         console.error("Failed to toggle favorite:", response.status);
       }
     } catch (error) {
       console.error("Error toggling favorite:", error);
     }
-  }, [fetchSavedListings]);
+  }, [allListings]);
 
   const handleSendRequest = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -468,7 +512,10 @@ export default function StudentDashboard() {
 
   const handleSendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageRecipientId || !contactMessage) return;
+    if (!studentProfile?.id || !messageRecipientId || !contactMessage.trim()) {
+      toast.error("Authentication required or missing recipient/message.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -485,10 +532,12 @@ export default function StudentDashboard() {
       if (response.ok) {
         toast.success("Message sent successfully!");
         setContactMessage("");
-        setMessageRecipientId(null);
-        setMessageListingId(null);
-        setMessageAnnouncementId(null);
-
+        refreshMessages(); // Refresh all messages to ensure UI is up-to-date with DB
+        // No need to reset recipient/context IDs here; they remain for the selected conversation
+        // setMessageRecipientId(null);
+        // setMessageListingId(null);
+        // setMessageAnnouncementId(null);
+        
         // Optimistically update the UI with the new message
         if (studentProfile && selectedConversation) {
           const newMessage: Message = {
@@ -506,10 +555,15 @@ export default function StudentDashboard() {
             listing_title: selectedConversation.contextType === 'listing' ? selectedConversation.contextTitle : null,
             listing_city: null, // We don't have this easily on frontend
             announcement_title: selectedConversation.contextType === 'announcement' ? selectedConversation.contextTitle : null,
+            receiver_first_name: messageRecipientFirstName,
+            receiver_last_name: messageRecipientLastName,
+            receiver_avatar_url: messageRecipientAvatarUrl,
           };
 
-          setMessages(prevMessages => [...prevMessages, newMessage]); // Add to the main messages state
+          // Update the main messages state with the new message
+          setMessages(prevMessages => [...prevMessages, newMessage]);
 
+          // Update the conversations state to reflect the new message and move conversation to top
           setConversations(prevConversations => {
             const updatedConversations = prevConversations.map(conv => {
               if (conv.id === selectedConversation.id) {
@@ -517,14 +571,14 @@ export default function StudentDashboard() {
                   ...conv,
                   messages: [...conv.messages, newMessage],
                   lastMessage: newMessage, // Update last message to the new one
-                  unreadCount: 0, // Clear unread count for this conversation
+                  unreadCount: 0, // Clear unread count for this conversation as we just sent a message
                 };
               }
               return conv;
             });
-            // Ensure the updated conversation is at the top
             const conversationToMove = updatedConversations.find(conv => conv.id === selectedConversation.id);
             if (conversationToMove) {
+              // Move the updated conversation to the beginning of the array
               return [conversationToMove, ...updatedConversations.filter(conv => conv.id !== selectedConversation.id)];
             }
             return updatedConversations;
@@ -536,9 +590,10 @@ export default function StudentDashboard() {
               messages: [...prevSelected.messages, newMessage], 
               lastMessage: newMessage 
             } : null);
+        } else {
+          // If for some reason selectedConversation is not available, re-fetch all messages
+          refreshMessages(); // Call refreshMessages here
         }
-
-        fetchMessages(); // Still fetch messages to get definitive data and handle new incoming messages
       } else {
         const errorData = await response.json();
         toast.error(errorData.error || "Failed to send message.");
@@ -550,7 +605,7 @@ export default function StudentDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [fetchMessages, selectedConversation, studentProfile, messageAnnouncementId, messageRecipientId, contactMessage, messageListingId]); // Added messageRecipientId, contactMessage, messageListingId as they are used inside the useCallback for optimistic updates.
+  }, [fetchMessages, selectedConversation, studentProfile, messageAnnouncementId, messageRecipientId, contactMessage, messageListingId, conversations, messageRecipientFirstName, messageRecipientLastName, messageRecipientAvatarUrl, refreshMessages]); // Added conversations to dependencies for setConversations
 
   const openRequestModalForNew = (listingId: string) => {
     setEditingRequest(null);
@@ -593,15 +648,16 @@ export default function StudentDashboard() {
           setSelectedConversation(existingConversation);
         } else if (studentProfile) {
           const listing = allListings.find(l => l.listing_id === listingId);
+          const newConversationId = `L-${listingId}-${recipientId}`;
           setSelectedConversation({
-            id: recipientId, // Simplified ID for new conversation
+            id: newConversationId, 
             participant: {
               id: recipientId,
               first_name: recipientFirstName || "",
               last_name: recipientLastName || "",
               avatar_url: recipientAvatarUrl || "/placeholder.svg", // Assuming listing might have owner_avatar_url
             },
-            lastMessage: { id: '', sender_id: studentProfile.id, recipient_id: recipientId, content: '', is_read: false, created_at: '', sender_first_name: studentProfile.first_name || "", sender_last_name: studentProfile.last_name || "", sender_avatar_url: studentProfile.avatar_url || "/placeholder.svg", listing_title: listing?.title || `Listing ${listingId}`, listing_city: listing?.city || null, listing_id: listingId, announcement_id: null },
+            lastMessage: { id: '', sender_id: studentProfile.id, recipient_id: recipientId, content: '', is_read: false, created_at: '', sender_first_name: studentProfile.first_name || "", sender_last_name: studentProfile.last_name || "", sender_avatar_url: studentProfile.avatar_url || "/placeholder.svg", listing_title: listing?.title || `Listing ${listingId}`, listing_city: listing?.city || null, listing_id: listingId, announcement_id: null, receiver_first_name: recipientFirstName, receiver_last_name: recipientLastName, receiver_avatar_url: recipientAvatarUrl },
             unreadCount: 0,
             messages: [],
             contextType: 'listing',
@@ -617,17 +673,16 @@ export default function StudentDashboard() {
           setSelectedConversation(existingConversation);
         } else if (studentProfile) {
           const announcement = myAnnouncements.find(a => a.id === announcementId);
-          // Note: Announcement interface does not directly have user_first_name/last_name/avatar_url.
-          // We are assuming these would be passed or fetched, or derived from messages.
+          const newConversationId = `A-${announcementId}-${recipientId}`;
           setSelectedConversation({
-            id: recipientId, // Simplified ID for new conversation
+            id: newConversationId, 
             participant: {
               id: recipientId,
               first_name: recipientFirstName || "",
               last_name: recipientLastName || "",
               avatar_url: recipientAvatarUrl || "/placeholder.svg",
             },
-            lastMessage: { id: '', sender_id: studentProfile.id, recipient_id: recipientId, content: '', is_read: false, created_at: '', sender_first_name: studentProfile.first_name || "", sender_last_name: studentProfile.last_name || "", sender_avatar_url: studentProfile.avatar_url || "/placeholder.svg", listing_title: null, listing_city: null, listing_id: null, announcement_id: announcementId, announcement_title: announcement?.title },
+            lastMessage: { id: '', sender_id: studentProfile.id, recipient_id: recipientId, content: '', is_read: false, created_at: '', sender_first_name: studentProfile.first_name || "", sender_last_name: studentProfile.last_name || "", sender_avatar_url: studentProfile.avatar_url || "/placeholder.svg", listing_title: null, listing_city: null, listing_id: null, announcement_id: announcementId, announcement_title: announcement?.title, receiver_first_name: recipientFirstName, receiver_last_name: recipientLastName, receiver_avatar_url: recipientAvatarUrl },
             unreadCount: 0,
             messages: [],
             contextType: 'announcement',
@@ -643,15 +698,16 @@ export default function StudentDashboard() {
         if (existingConversation) {
           setSelectedConversation(existingConversation);
         } else {
+          const newConversationId = `G-${recipientId}`;
           setSelectedConversation({
-            id: recipientId, // Simplified ID for new general conversation
+            id: newConversationId, 
             participant: {
               id: recipientId,
               first_name: recipientFirstName,
               last_name: recipientLastName,
               avatar_url: recipientAvatarUrl,
             },
-            lastMessage: { id: '', sender_id: studentProfile.id, recipient_id: recipientId, content: '', is_read: false, created_at: '', sender_first_name: studentProfile.first_name || "", sender_last_name: studentProfile.last_name || "", sender_avatar_url: studentProfile.avatar_url || "/placeholder.svg", listing_title: null, listing_city: null, listing_id: null, announcement_id: null },
+            lastMessage: { id: '', sender_id: studentProfile.id, recipient_id: recipientId, content: '', is_read: false, created_at: '', sender_first_name: studentProfile.first_name || "", sender_last_name: studentProfile.last_name || "", sender_avatar_url: studentProfile.avatar_url || "/placeholder.svg", listing_title: null, listing_city: null, listing_id: null, announcement_id: null, receiver_first_name: recipientFirstName, receiver_last_name: recipientLastName, receiver_avatar_url: recipientAvatarUrl },
             unreadCount: 0,
             messages: [],
             contextType: 'general',
@@ -675,7 +731,7 @@ export default function StudentDashboard() {
     if (studentProfile?.id) {
       fetchMessages();
     }
-  }, [studentProfile?.id, fetchMessages]);
+  }, [studentProfile?.id]); // Removed fetchMessages from dependencies
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -745,6 +801,55 @@ export default function StudentDashboard() {
     }
   };
 
+  const handleProfileUpdate = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studentProfile?.id) {
+      toast.error("Authentication required to update profile.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetchWithAuth(router, "/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: editedFirstName,
+          last_name: editedLastName,
+          phone: editedPhone,
+          bio: editedBio,
+          university: editedUniversity,
+          study_level: editedStudyLevel,
+          preferences: editedPreferences,
+          avatar_url: editedAvatarUrl || undefined, // Only send if it's not null/undefined
+        }),
+      });
+
+      if (response.ok) {
+        const updatedData = await response.json();
+        setStudentProfile(updatedData);
+        setEditedFirstName(updatedData.first_name || "");
+        setEditedLastName(updatedData.last_name || "");
+        setEditedPhone(updatedData.phone || "");
+        setEditedBio(updatedData.bio || "");
+        setEditedUniversity(updatedData.university || "");
+        setEditedStudyLevel(updatedData.study_level || "");
+        setEditedPreferences(updatedData.preferences || {});
+        setEditedAvatarUrl(updatedData.avatar_url || null);
+        toast.success("Profile updated successfully!");
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.error || "Failed to update profile.");
+        console.error("Failed to update profile:", response.status, errorData.error);
+      }
+    } catch (error) {
+      toast.error("Error updating profile.");
+      console.error("Error updating profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [studentProfile?.id, editedFirstName, editedLastName, editedPhone, editedBio, editedUniversity, editedStudyLevel, editedPreferences, editedAvatarUrl, router]);
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -752,16 +857,16 @@ export default function StudentDashboard() {
           {/* Sidebar */}
           <div className="lg:w-80">
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-6 flex flex-col items-center">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="relative">
                     <Avatar className="w-16 h-16">
-                      <AvatarImage src={getAvatarDisplayUrl(studentProfile?.avatar_url)} />
+                      <AvatarImage src={getAvatarDisplayUrl(editedAvatarUrl)} />
                       <AvatarFallback 
                         style={{ backgroundColor: studentProfile?.email ? stringToColor(studentProfile.email) : '#9ca3af' }} 
                         className="text-white font-semibold"
                       >
-                        {studentProfile?.first_name?.[0]}{studentProfile?.last_name?.[0]}
+                        {editedFirstName?.[0]}{editedLastName?.[0]}
                       </AvatarFallback>
                     </Avatar>
                     {studentProfile?.status === 'active' && (
@@ -771,9 +876,9 @@ export default function StudentDashboard() {
                     )}
                   </div>
                   <div>
-                    <h2 className="font-semibold text-foreground">{studentProfile?.first_name} {studentProfile?.last_name}</h2>
-                    <p className="text-sm text-muted-foreground">{studentProfile?.study_level || studentProfile?.user_type}</p>
-                    <p className="text-xs text-muted-foreground">{studentProfile?.university}</p>
+                    <h2 className="font-semibold text-foreground">{editedFirstName} {editedLastName}</h2>
+                    <p className="text-sm text-muted-foreground">{editedStudyLevel || studentProfile?.user_type}</p>
+                    <p className="text-xs text-muted-foreground">{editedUniversity}</p>
                   </div>
                 </div>
 
@@ -813,7 +918,10 @@ export default function StudentDashboard() {
                   <Button
                     variant={activeTab === "messages" ? "default" : "ghost"} // New tab for Messages
                     className="w-full justify-start"
-                    onClick={() => setActiveTab("messages")}
+                    onClick={() => {
+                      setActiveTab("messages");
+                      setSelectedConversation(null); // Deselect conversation when navigating to messages tab
+                    }}
                   >
                     <Mail className="w-4 h-4 mr-3" />
                     Messages
@@ -897,7 +1005,7 @@ export default function StudentDashboard() {
                         <Input placeholder="Location" className="pl-10" />
                       </div>
                       <div className="flex-1">
-                        <Input placeholder="Max Budget (TND)" type="number" />
+                        <Input placeholder="Max Budget (TND)" type="number" className="flex-1" />
                       </div>
                       <Button className="bg-primary hover:bg-primary/90">
                         <Search className="w-4 h-4 mr-2" />
@@ -1026,70 +1134,7 @@ export default function StudentDashboard() {
                         <Link href="/search">Find Rooms Now</Link>
                       </Button>
 
-                      {!loading && allListings.length > 0 && (
-                        <div className="mt-12">
-                          <h2 className="text-2xl font-bold text-foreground mb-6">Recommended Listings</h2>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {allListings.map((listing) => (
-                              <Card key={listing.listing_id} className="group hover:shadow-lg hover:scale-[1.02] transition-all duration-300 ease-in-out">
-                                <div className="relative">
-                                  <img
-                                    src={getListingImageUrl(listing.images)}
-                                    alt={listing.title}
-                                    className="w-full h-48 object-cover rounded-t-lg"
-                                  />
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="absolute top-3 right-3 bg-background/80 hover:bg-background"
-                                    onClick={() => handleToggleFavorite(listing.listing_id)}
-                                  >
-                                    <Heart className={`w-4 h-4 ${savedListings.some(sl => sl.listing_id === listing.listing_id) ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
-                                  </Button>
-                                  <Badge className={`absolute top-3 left-3 ${getStatusColor(listing.status)}`}>
-                                    {getStatusIcon(listing.status)}
-                                    {listing.status}
-                                  </Badge>
-                                </div>
-
-                                <CardContent className="p-4">
-                                  <h3 className="font-semibold text-foreground mb-2">{listing.title}</h3>
-                                  <div className="flex items-center text-muted-foreground mb-2">
-                                    <MapPin className="w-4 h-4 mr-1" />
-                                    <span className="text-sm">{listing.city}</span>
-                                  </div>
-                                  <div className="flex items-center text-muted-foreground mb-2">
-                                    <Users className="w-4 h-4 mr-1" />
-                                    <span className="text-sm">{listing.number_of_roommates} Roommate(s)</span>
-                                  </div>
-                                  <div className="flex flex-wrap gap-1 mb-2">
-                                    {getParsedAmenities(listing.amenities).map((amenity: string, index: number) => (
-                                      <Badge key={index} variant="secondary" className="text-xs">
-                                        {amenity}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                  <div className="flex items-center justify-between mb-3">
-                                    <span className="text-lg font-bold text-primary">{listing.price} TND/month</span>
-                                    <div className="flex items-center gap-1">
-                                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                                      <span className="text-sm">4.5</span>{/* Placeholder for rating */}
-                                    </div>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <Button className="flex-1 bg-primary hover:bg-primary/90" asChild>
-                                      <Link href={`/listings/${listing.listing_id}`}>View Details</Link>
-                                    </Button>
-                                    <Button variant="outline" size="sm" onClick={() => openRequestModalForNew(listing.listing_id)}>
-                                      <Plus className="w-4 h-4 mr-2" /> Send Request
-                                    </Button>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                    
                     </div>
                   )}
                 </div>
@@ -1228,7 +1273,7 @@ export default function StudentDashboard() {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <form onSubmit={handleProfileUpdate} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Personal Information */}
                   <Card>
                     <CardHeader>
@@ -1238,12 +1283,12 @@ export default function StudentDashboard() {
                       <div className="flex items-center gap-4 mb-6">
                         <div className="relative">
                           <Avatar className="w-20 h-20">
-                            <AvatarImage src={getAvatarDisplayUrl(studentProfile?.avatar_url)} />
+                            <AvatarImage src={getAvatarDisplayUrl(editedAvatarUrl)} />
                             <AvatarFallback 
                               style={{ backgroundColor: studentProfile?.email ? stringToColor(studentProfile.email) : '#9ca3af' }} 
                               className="text-white font-semibold"
                             >
-                              {studentProfile?.first_name?.[0]}{studentProfile?.last_name?.[0]}
+                              {editedFirstName?.[0]}{editedLastName?.[0]}
                             </AvatarFallback>
                           </Avatar>
                           {editingProfile && (
@@ -1253,8 +1298,10 @@ export default function StudentDashboard() {
                           )}
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground">{studentProfile?.first_name} {studentProfile?.last_name}</h3>
-                          <p className="text-sm text-muted-foreground">Member since {new Date(studentProfile?.created_at || "").toLocaleDateString()}</p>
+                          <h3 className="font-semibold text-foreground">{editedFirstName} {editedLastName}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            Member since {studentProfile?.created_at ? new Date(studentProfile.created_at).toLocaleDateString() : "N/A"}
+                          </p>
                           {studentProfile?.status === 'active' && (
                             <Badge variant="secondary" className="mt-1">
                               <CheckCircle className="w-3 h-3 mr-1" />
@@ -1266,10 +1313,21 @@ export default function StudentDashboard() {
 
                       <div className="space-y-4">
                         <div>
-                          <Label htmlFor="name">Full Name</Label>
+                          <Label htmlFor="first_name">First Name</Label>
                           <Input
-                            id="name"
-                            value={`${studentProfile?.first_name || ""} ${studentProfile?.last_name || ""}`}
+                            id="first_name"
+                            value={editedFirstName}
+                            onChange={(e) => setEditedFirstName(e.target.value)}
+                            disabled={!editingProfile}
+                            className={editingProfile ? "" : "bg-muted"}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="last_name">Last Name</Label>
+                          <Input
+                            id="last_name"
+                            value={editedLastName}
+                            onChange={(e) => setEditedLastName(e.target.value)}
                             disabled={!editingProfile}
                             className={editingProfile ? "" : "bg-muted"}
                           />
@@ -1279,6 +1337,16 @@ export default function StudentDashboard() {
                           <Input
                             id="email"
                             value={studentProfile?.email || ""}
+                            disabled={true} // Email should not be editable
+                            className="bg-muted"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="phone">Phone Number</Label>
+                          <Input
+                            id="phone"
+                            value={editedPhone}
+                            onChange={(e) => setEditedPhone(e.target.value)}
                             disabled={!editingProfile}
                             className={editingProfile ? "" : "bg-muted"}
                           />
@@ -1288,16 +1356,22 @@ export default function StudentDashboard() {
                             <Label htmlFor="age">Age</Label>
                             <Input
                               id="age"
-                              value={studentProfile?.preferences?.age || ""}
+                              type="number"
+                              value={editedPreferences?.age || ""}
+                              onChange={(e) => setEditedPreferences({ ...editedPreferences, age: Number(e.target.value) })}
                               disabled={!editingProfile}
                               className={editingProfile ? "" : "bg-muted"}
                             />
                           </div>
                           <div>
                             <Label htmlFor="gender">Gender</Label>
-                            <Select value={studentProfile?.preferences?.gender} disabled={!editingProfile}>
+                            <Select
+                              value={editedPreferences?.gender}
+                              onValueChange={(value) => setEditedPreferences({ ...editedPreferences, gender: value })}
+                              disabled={!editingProfile}
+                            >
                               <SelectTrigger className={editingProfile ? "" : "bg-muted"}>
-                                <SelectValue placeholder={studentProfile?.preferences?.gender || "Select"} />
+                                <SelectValue placeholder="Select" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="male">Male</SelectItem>
@@ -1309,23 +1383,28 @@ export default function StudentDashboard() {
                         </div>
                         <div>
                           <Label htmlFor="university">University</Label>
-                          <Select value={studentProfile?.university} disabled={!editingProfile}>
+                          <Select
+                            value={editedUniversity}
+                            onValueChange={setEditedUniversity}
+                            disabled={!editingProfile}
+                          >
                             <SelectTrigger className={editingProfile ? "" : "bg-muted"}>
-                              <SelectValue placeholder={studentProfile?.university || "Select your university"} />
+                              <SelectValue placeholder="Select your university" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="university-tunis">University of Tunis</SelectItem>
-                              <SelectItem value="university-sfax">University of Sfax</SelectItem>
-                              <SelectItem value="university-sousse">University of Sousse</SelectItem>
-                                <SelectItem value="university-monastir">University of Monastir</SelectItem>
+                              <SelectItem value="University of Tunis">University of Tunis</SelectItem>
+                              <SelectItem value="University of Sfax">University of Sfax</SelectItem>
+                              <SelectItem value="University of Sousse">University of Sousse</SelectItem>
+                              <SelectItem value="University of Monastir">University of Monastir</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
                         <div>
-                          <Label htmlFor="field">Field of Study</Label>
+                          <Label htmlFor="study_level">Study Level</Label>
                           <Input
-                            id="field"
-                            value={studentProfile?.study_level || ""}
+                            id="study_level"
+                            value={editedStudyLevel}
+                            onChange={(e) => setEditedStudyLevel(e.target.value)}
                             disabled={!editingProfile}
                             className={editingProfile ? "" : "bg-muted"}
                           />
@@ -1334,7 +1413,8 @@ export default function StudentDashboard() {
                           <Label htmlFor="bio">About Me</Label>
                           <Textarea
                             id="bio"
-                            value={studentProfile?.bio || ""}
+                            value={editedBio}
+                            onChange={(e) => setEditedBio(e.target.value)}
                             disabled={!editingProfile}
                             className={editingProfile ? "" : "bg-muted"}
                             rows={3}
@@ -1355,30 +1435,21 @@ export default function StudentDashboard() {
                         <Input
                           id="budget"
                           type="number"
-                          value={studentProfile?.preferences?.budget || ""}
+                          value={editedPreferences?.budget || ""}
+                          onChange={(e) => setEditedPreferences({ ...editedPreferences, budget: Number(e.target.value) })}
                           disabled={!editingProfile}
                           className={editingProfile ? "" : "bg-muted"}
                         />
                       </div>
                       <div>
-                        <Label htmlFor="location">Preferred Location</Label>
-                        <Select value={studentProfile?.preferences?.location} disabled={!editingProfile}>
+                        <Label htmlFor="maxRoommates">Max Roommates</Label>
+                        <Select
+                          value={String(editedPreferences?.maxRoommates || "")}
+                          onValueChange={(value) => setEditedPreferences({ ...editedPreferences, maxRoommates: Number(value) })}
+                          disabled={!editingProfile}
+                        >
                           <SelectTrigger className={editingProfile ? "" : "bg-muted"}>
-                            <SelectValue placeholder={studentProfile?.preferences?.location || "Select city"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="tunis">Tunis</SelectItem>
-                            <SelectItem value="sfax">Sfax</SelectItem>
-                            <SelectItem value="sousse">Sousse</SelectItem>
-                            <SelectItem value="monastir">Monastir</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <Label htmlFor="roommates">Max Roommates</Label>
-                        <Select value={String(studentProfile?.preferences?.maxRoommates || "")} disabled={!editingProfile}>
-                          <SelectTrigger className={editingProfile ? "" : "bg-muted"}>
-                            <SelectValue placeholder={String(studentProfile?.preferences?.maxRoommates || "Select")} />
+                            <SelectValue placeholder="Select" />
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="1">1</SelectItem>
@@ -1393,15 +1464,16 @@ export default function StudentDashboard() {
                         <Label>Required Amenities</Label>
                         <div className="space-y-2">
                           {[
-                            { key: "furnished", label: "Furnished", checked: studentProfile?.preferences?.furnished },
-                            { key: "wifi", label: "WiFi", checked: studentProfile?.preferences?.wifi },
-                            { key: "parking", label: "Parking", checked: studentProfile?.preferences?.parking },
+                            { key: "furnished", label: "Furnished", checked: editedPreferences?.furnished, onToggle: (checked: boolean) => setEditedPreferences({ ...editedPreferences, furnished: checked }) },
+                            { key: "wifi", label: "WiFi", checked: editedPreferences?.wifi, onToggle: (checked: boolean) => setEditedPreferences({ ...editedPreferences, wifi: checked }) },
+                            { key: "parking", label: "Parking", checked: editedPreferences?.parking, onToggle: (checked: boolean) => setEditedPreferences({ ...editedPreferences, parking: checked }) },
                           ].map((amenity) => (
                             <div key={amenity.key} className="flex items-center space-x-2">
                               <input
                                 type="checkbox"
                                 id={amenity.key}
                                 checked={amenity.checked}
+                                onChange={(e) => amenity.onToggle(e.target.checked)}
                                 disabled={!editingProfile}
                                 className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
                               />
@@ -1415,12 +1487,12 @@ export default function StudentDashboard() {
 
                       {editingProfile && (
                         <div className="pt-4">
-                          <Button className="w-full bg-primary hover:bg-primary/90">Save Changes</Button>
+                          <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={loading}>Save Changes</Button>
                         </div>
                       )}
                     </CardContent>
                   </Card>
-                </div>
+                </form>
               </div>
             )}
 
@@ -1445,7 +1517,16 @@ export default function StudentDashboard() {
                     {!loading && conversations.length === 0 && <p className="text-muted-foreground">No conversations found.</p>}
                     {!loading && conversations.map(conversation => (
                       <Card key={conversation.id} className="hover:shadow-lg transition-shadow duration-300 ease-in-out cursor-pointer"
-                        onClick={() => setSelectedConversation(conversation)}>
+                        onClick={() => {
+                          setSelectedConversation(conversation);
+                          setMessageRecipientId(conversation.participant.id);
+                          // Set context for sending messages
+                          setMessageListingId(conversation.contextType === 'listing' ? conversation.contextId : null);
+                          setMessageAnnouncementId(conversation.contextType === 'announcement' ? conversation.contextId : null);
+                          setMessageRecipientFirstName(conversation.participant.first_name);
+                          setMessageRecipientLastName(conversation.participant.last_name);
+                          setMessageRecipientAvatarUrl(conversation.participant.avatar_url);
+                        }}>
                         <CardContent className="p-4 flex items-start gap-4">
                           <Avatar className="w-12 h-12">
                             <AvatarImage src={getAvatarDisplayUrl(conversation.participant.avatar_url)} />

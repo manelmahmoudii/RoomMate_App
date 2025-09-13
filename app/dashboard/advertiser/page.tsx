@@ -20,7 +20,6 @@ import {
   Edit3,
   Trash2,
   TrendingUp,
-  MapPin,
   Star,
   Clock,
   CheckCircle,
@@ -31,9 +30,12 @@ import {
   Mail,
   Bell,
   ArrowLeft,
-  Camera
+  Camera,
+  MapPin
 } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation";
+import { fetchWithAuth } from "@/lib/fetchWithAuth";
 
 interface User {
   id: string;
@@ -47,7 +49,8 @@ interface User {
   totalReviews?: number;
   rating?: number;
   phone?: string;
-  location?: string;
+  bio?: string;
+  account_type?: string;
 }
 
 interface Listing {
@@ -93,6 +96,9 @@ interface Message {
   listing_title: string | null;
   listing_city: string | null;
   announcement_title?: string | null;
+  receiver_first_name: string;
+  receiver_last_name: string;
+  receiver_avatar_url: string;
 }
 
 interface ConversationParticipant {
@@ -203,25 +209,41 @@ export default function AdvertiserDashboard() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [allListings, setAllListings] = useState<Listing[]>([]);
+  const [messageRecipientId, setMessageRecipientId] = useState<string | null>(null);
+  const [messageListingId, setMessageListingId] = useState<string | null>(null);
+  const [messageAnnouncementId, setMessageAnnouncementId] = useState<string | null>(null);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [editedFirstName, setEditedFirstName] = useState("");
+  const [editedLastName, setEditedLastName] = useState("");
+  const [editedPhone, setEditedPhone] = useState("");
+  const [editedBio, setEditedBio] = useState("");
+  const [editedAccountType, setEditedAccountType] = useState("");
+  const [editedAvatarUrl, setEditedAvatarUrl] = useState<string | null>(null);
+
+  const router = useRouter();
 
   const groupMessagesByConversation = useCallback((allMessages: Message[], currentUserId: string, allListings: Listing[], allAnnouncements: Announcement[]): Conversation[] => {
+    if (!currentUserId || allMessages.length === 0) return []; // Return empty array if no messages
     const conversationsMap = new Map<string, Conversation>();
 
     allMessages.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
     allMessages.forEach(message => {
       const otherParticipantId = message.sender_id === currentUserId ? message.recipient_id : message.sender_id;
-      const conversationKey = otherParticipantId;
+      
+      // Conversation key is now based on the other participant's ID AND the context (listing/announcement)
+      const contextPrefix = message.listing_id ? `L-${message.listing_id}-` : message.announcement_id ? `A-${message.announcement_id}-` : `G-`;
+      const conversationKey = `${contextPrefix}${otherParticipantId}`;
 
       if (!conversationsMap.has(conversationKey)) {
-        const participantFirstName = (message.sender_id === currentUserId && advertiserProfile?.id === message.sender_id)
-          ? advertiserProfile.first_name
+        const participantFirstName = message.sender_id === currentUserId 
+          ? message.receiver_first_name || "" 
           : message.sender_first_name || "";
-        const participantLastName = (message.sender_id === currentUserId && advertiserProfile?.id === message.sender_id)
-          ? advertiserProfile.last_name
+        const participantLastName = message.sender_id === currentUserId 
+          ? message.receiver_last_name || "" 
           : message.sender_last_name || "";
-        const participantAvatarUrl = (message.sender_id === currentUserId && advertiserProfile?.id === message.sender_id)
-          ? (advertiserProfile.avatar_url || "/placeholder.svg")
+        const participantAvatarUrl = message.sender_id === currentUserId 
+          ? message.receiver_avatar_url || "/placeholder.svg" 
           : message.sender_avatar_url || "/placeholder.svg";
 
         conversationsMap.set(conversationKey, {
@@ -265,18 +287,26 @@ export default function AdvertiserDashboard() {
       }
     });
 
-    return Array.from(conversationsMap.values()).sort((a, b) => 
+    const finalGroupedConversations = Array.from(conversationsMap.values()).sort((a, b) => 
       new Date(b.lastMessage.created_at).getTime() - new Date(a.lastMessage.created_at).getTime()
     );
-  }, [advertiserProfile]);
+    console.log("Final Grouped Conversations (Advertiser Dashboard):", finalGroupedConversations); // Debug log
+    return finalGroupedConversations;
+  }, [advertiserProfile, allListings, myAnnouncements]);
 
   const fetchAdvertiserProfile = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/auth/session");
+      const response = await fetchWithAuth(router, "/api/profile");
       if (response.ok) {
         const data = await response.json();
         setAdvertiserProfile(data);
+        setEditedFirstName(data.first_name || "");
+        setEditedLastName(data.last_name || "");
+        setEditedPhone(data.phone || "");
+        setEditedBio(data.bio || "");
+        setEditedAccountType(data.account_type || "");
+        setEditedAvatarUrl(data.avatar_url || null);
       } else {
         console.error("Failed to fetch advertiser profile:", response.status);
       }
@@ -285,7 +315,52 @@ export default function AdvertiserDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
+
+  const handleProfileUpdate = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!advertiserProfile?.id) {
+      toast.error("Authentication required to update profile.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetchWithAuth(router, "/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: editedFirstName,
+          last_name: editedLastName,
+          phone: editedPhone,
+          bio: editedBio,
+          account_type: editedAccountType,
+          avatar_url: editedAvatarUrl || undefined,
+        }),
+      });
+
+      if (response.ok) {
+        const updatedData = await response.json();
+        setAdvertiserProfile(updatedData);
+        setEditedFirstName(updatedData.first_name || "");
+        setEditedLastName(updatedData.last_name || "");
+        setEditedPhone(updatedData.phone || "");
+        setEditedBio(updatedData.bio || "");
+        setEditedAccountType(updatedData.account_type || "");
+        setEditedAvatarUrl(updatedData.avatar_url || null);
+        toast.success("Profile updated successfully!");
+      } else {
+        const errorData = await response.json();
+        toast.error(errorData.error || "Failed to update profile.");
+        console.error("Failed to update profile:", response.status, errorData.error);
+      }
+    } catch (error) {
+      toast.error("Error updating profile.");
+      console.error("Error updating profile:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [advertiserProfile?.id, editedFirstName, editedLastName, editedPhone, editedBio, editedAccountType, editedAvatarUrl, router]);
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -363,8 +438,10 @@ export default function AdvertiserDashboard() {
       const response = await fetch("/api/messages");
       if (response.ok) {
         const data: Message[] = await response.json();
+        console.log("RAW Messages from API (Advertiser Dashboard):", data); // Debug log
         setMessages(data);
         const grouped = groupMessagesByConversation(data, advertiserProfile.id, allListings, myAnnouncements);
+        console.log("Grouped Conversations (Advertiser Dashboard):", grouped); // Debug log
         setConversations(grouped);
         if (selectedConversation) {
           const updatedSelected = grouped.find(conv => conv.id === selectedConversation.id);
@@ -380,7 +457,12 @@ export default function AdvertiserDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [advertiserProfile?.id, groupMessagesByConversation, allListings, myAnnouncements, selectedConversation]);
+  }, [advertiserProfile?.id, groupMessagesByConversation, allListings, myAnnouncements]);
+
+  // New function to refresh all messages
+  const refreshMessages = useCallback(() => {
+    fetchMessages();
+  }, [fetchMessages]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -615,7 +697,7 @@ export default function AdvertiserDashboard() {
   }, [fetchRequests]);
 
   const handleSendMessage = useCallback(async () => {
-    if (!advertiserProfile?.id || !selectedConversation?.participant.id || !contactMessage.trim()) {
+    if (!advertiserProfile?.id || !messageRecipientId || !contactMessage.trim()) {
       toast.error("Authentication required or missing recipient/message.");
       return;
     }
@@ -626,32 +708,39 @@ export default function AdvertiserDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          recipientId: selectedConversation.participant.id,
+          recipientId: messageRecipientId,
           message: contactMessage.trim(),
-          listingId: selectedConversation.contextType === 'listing' ? selectedConversation.contextId : null,
-          announcementId: selectedConversation.contextType === 'announcement' ? selectedConversation.contextId : null,
+          listingId: messageListingId,
+          announcementId: messageAnnouncementId,
         }),
       });
 
       if (response.ok) {
         toast.success("Message sent successfully!");
         setContactMessage("");
+        refreshMessages(); // Refresh all messages to ensure UI is up-to-date with DB
+        setMessageRecipientId(null);
+        setMessageListingId(null);
+        setMessageAnnouncementId(null);
         if (advertiserProfile && selectedConversation) {
           const newMessage: Message = {
             id: `temp-${Date.now()}`,
             sender_id: advertiserProfile.id,
-            recipient_id: selectedConversation.participant.id,
+            recipient_id: messageRecipientId,
             content: contactMessage,
-            listing_id: selectedConversation.contextType === 'listing' ? selectedConversation.contextId : null,
-            announcement_id: selectedConversation.contextType === 'announcement' ? selectedConversation.contextId : null,
+            listing_id: messageListingId,
+            announcement_id: messageAnnouncementId,
             is_read: true,
             created_at: new Date().toISOString(),
             sender_first_name: advertiserProfile.first_name || "",
             sender_last_name: advertiserProfile.last_name || "",
             sender_avatar_url: advertiserProfile.avatar_url || "/placeholder.svg",
-            listing_title: selectedConversation.contextType === 'listing' ? selectedConversation.contextTitle : null,
-            listing_city: selectedConversation.contextType === 'listing' ? selectedConversation.lastMessage.listing_city || null : null,
-            announcement_title: selectedConversation.contextType === 'announcement' ? selectedConversation.contextTitle : null,
+            listing_title: messageListingId ? (allListings.find(l => l.id === messageListingId)?.title || `Listing ${messageListingId}`) : null,
+            listing_city: messageListingId ? (allListings.find(l => l.id === messageListingId)?.city || null) : null,
+            announcement_title: messageAnnouncementId ? (myAnnouncements.find(a => a.id === messageAnnouncementId)?.title || `Announcement ${messageAnnouncementId}`) : null,
+            receiver_first_name: selectedConversation.participant.first_name || "",
+            receiver_last_name: selectedConversation.participant.last_name || "",
+            receiver_avatar_url: selectedConversation.participant.avatar_url || "/placeholder.svg",
           };
 
           setConversations(prevConversations => {
@@ -673,7 +762,7 @@ export default function AdvertiserDashboard() {
           });
           setSelectedConversation(prev => prev ? { ...prev, messages: [...prev.messages, newMessage], lastMessage: newMessage } : null);
         } else {
-          fetchMessages();
+          refreshMessages(); // Re-fetch messages if no conversation is selected
         }
       } else {
         const errorData = await response.json();
@@ -685,19 +774,23 @@ export default function AdvertiserDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [advertiserProfile, selectedConversation, contactMessage, fetchMessages]);
+  }, [advertiserProfile, selectedConversation, contactMessage, messageRecipientId, messageListingId, messageAnnouncementId, allListings, myAnnouncements, refreshMessages]);
 
   const handleOpenMessageModal = useCallback((recipientId: string, listingId: string | null = null, announcementId: string | null = null, recipientFirstName: string = "", recipientLastName: string = "", recipientAvatarUrl: string = "/placeholder.svg") => {
     setContactMessage("");
     setActiveTab("messages");
 
-    const existingConversation = conversations.find(conv => conv.participant.id === recipientId);
+    // Create a robust conversation key to find existing conversations
+    const contextPrefix = listingId ? `L-${listingId}-` : announcementId ? `A-${announcementId}-` : `G-`;
+    const potentialConversationKey = `${contextPrefix}${recipientId}`;
+
+    const existingConversation = conversations.find(conv => conv.id === potentialConversationKey);
 
     if (existingConversation) {
       setSelectedConversation(existingConversation);
     } else if (advertiserProfile) {
       const newConversation: Conversation = {
-        id: recipientId,
+        id: potentialConversationKey, // Use the robust key for the new conversation's ID
         participant: {
           id: recipientId,
           first_name: recipientFirstName,
@@ -719,6 +812,9 @@ export default function AdvertiserDashboard() {
           listing_title: listingId ? (allListings.find(l => l.id === listingId)?.title || `Listing ${listingId}`) : null,
           listing_city: listingId ? (allListings.find(l => l.id === listingId)?.city || null) : null,
           announcement_title: announcementId ? (myAnnouncements.find(a => a.id === announcementId)?.title || `Announcement ${announcementId}`) : null,
+          receiver_first_name: recipientFirstName,
+          receiver_last_name: recipientLastName,
+          receiver_avatar_url: recipientAvatarUrl,
         },
         unreadCount: 0,
         messages: [],
@@ -749,10 +845,10 @@ export default function AdvertiserDashboard() {
   }, [fetchAdvertiserProfile, fetchListings, fetchRequests, fetchAnalytics, fetchMyAnnouncements]);
 
   useEffect(() => {
-    if (advertiserProfile?.id && allListings.length > 0 && myAnnouncements.length > 0) {
+    if (advertiserProfile?.id) {
       fetchMessages();
     }
-  }, [advertiserProfile?.id, allListings.length, myAnnouncements.length, fetchMessages]);
+  }, [advertiserProfile?.id, fetchMessages]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -791,16 +887,16 @@ export default function AdvertiserDashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-6">
                   <Avatar className="w-20 h-20">
-                    <AvatarImage src={getAvatarDisplayUrl(advertiserProfile?.avatar_url)} />
+                    <AvatarImage src={getAvatarDisplayUrl(editedAvatarUrl)} />
                     <AvatarFallback 
                       style={{ backgroundColor: advertiserProfile?.email ? stringToColor(advertiserProfile.email) : '#9ca3af' }} 
                       className="text-white font-semibold"
                     >
-                      {advertiserProfile?.first_name?.[0]}{advertiserProfile?.last_name?.[0]}
+                      {editedFirstName?.[0]}{editedLastName?.[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <h2 className="font-semibold text-foreground">{advertiserProfile?.first_name} {advertiserProfile?.last_name}</h2>
+                    <h2 className="font-semibold text-foreground">{editedFirstName} {editedLastName}</h2>
                     <p className="text-sm text-muted-foreground">{advertiserProfile?.user_type}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
@@ -1219,7 +1315,15 @@ export default function AdvertiserDashboard() {
                     {!loading && conversations.length === 0 && <p className="text-muted-foreground">No conversations found.</p>}
                     {!loading && conversations.map(conversation => (
                       <Card key={conversation.id} className="hover:shadow-lg transition-shadow duration-300 ease-in-out cursor-pointer"
-                        onClick={() => setSelectedConversation(conversation)}>
+                        onClick={() => {
+                          setSelectedConversation(conversation);
+                          // Set recipient and context IDs for message input
+                          // These are used by handleSendMessage when replying within a selected conversation
+                          // The conversation.participant.id is the 'other' person in the conversation
+                          setMessageRecipientId(conversation.participant.id);
+                          setMessageListingId(conversation.contextType === 'listing' ? conversation.contextId : null);
+                          setMessageAnnouncementId(conversation.contextType === 'announcement' ? conversation.contextId : null);
+                        }}>
                         <CardContent className="p-4 flex items-start gap-4">
                           <Avatar className="w-12 h-12">
                             <AvatarImage src={getAvatarDisplayUrl(conversation.participant.avatar_url || undefined)} />
@@ -1384,27 +1488,42 @@ export default function AdvertiserDashboard() {
 
             {activeTab === "profile" && (
               <div key="profile" className="space-y-6 transition-opacity duration-300 ease-in-out opacity-0 animate-fade-in">
-                <h1 className="text-3xl font-bold text-foreground">Profile Settings</h1>
+                <div className="flex items-center justify-between">
+                  <h1 className="text-3xl font-bold text-foreground">Profile Settings</h1>
+                  <Button variant="outline" onClick={() => setEditingProfile(!editingProfile)}>
+                    <Edit3 className="w-4 h-4 mr-2" />
+                    {editingProfile ? "Cancel" : "Edit Profile"}
+                  </Button>
+                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <form onSubmit={handleProfileUpdate} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <Card>
                     <CardHeader>
                       <CardTitle>Personal Information</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="flex items-center gap-4 mb-6">
-                        <Avatar className="w-20 h-20">
-                          <AvatarImage src={getAvatarDisplayUrl(advertiserProfile?.avatar_url)} />
-                          <AvatarFallback 
-                            style={{ backgroundColor: advertiserProfile?.email ? stringToColor(advertiserProfile.email) : '#9ca3af' }} 
-                            className="text-white font-semibold"
-                          >
-                            {advertiserProfile?.first_name?.[0]}{advertiserProfile?.last_name?.[0]}
-                          </AvatarFallback>
-                        </Avatar>
+                        <div className="relative">
+                          <Avatar className="w-20 h-20">
+                            <AvatarImage src={getAvatarDisplayUrl(editedAvatarUrl)} />
+                            <AvatarFallback 
+                              style={{ backgroundColor: advertiserProfile?.email ? stringToColor(advertiserProfile.email) : '#9ca3af' }} 
+                              className="text-white font-semibold"
+                            >
+                              {editedFirstName?.[0]}{editedLastName?.[0]}
+                            </AvatarFallback>
+                          </Avatar>
+                          {editingProfile && (
+                            <Button size="icon" variant="secondary" className="absolute -bottom-2 -right-2 w-8 h-8">
+                              <Camera className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                         <div>
-                          <h2 className="font-semibold text-foreground">{advertiserProfile?.first_name} {advertiserProfile?.last_name}</h2>
-                          <p className="text-sm text-muted-foreground">Member since {new Date(advertiserProfile?.created_at || "").toLocaleDateString()}</p>
+                          <h2 className="font-semibold text-foreground">{editedFirstName} {editedLastName}</h2>
+                          <p className="text-sm text-muted-foreground">
+                            Member since {advertiserProfile?.created_at ? new Date(advertiserProfile.created_at).toLocaleDateString() : "N/A"}
+                          </p>
                           {advertiserProfile?.status === 'active' && (
                             <Badge variant="secondary" className="mt-1">
                               <CheckCircle className="w-3 h-3 mr-1" />
@@ -1416,46 +1535,72 @@ export default function AdvertiserDashboard() {
 
                       <div className="space-y-4">
                         <div>
-                          <Label htmlFor="name">Full Name</Label>
-                          <Input id="name" value={`${advertiserProfile?.first_name || ""} ${advertiserProfile?.last_name || ""}`} readOnly />
+                          <Label htmlFor="first_name">First Name</Label>
+                          <Input
+                            id="first_name"
+                            value={editedFirstName}
+                            onChange={(e) => setEditedFirstName(e.target.value)}
+                            disabled={!editingProfile}
+                            className={editingProfile ? "" : "bg-muted"}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="last_name">Last Name</Label>
+                          <Input
+                            id="last_name"
+                            value={editedLastName}
+                            onChange={(e) => setEditedLastName(e.target.value)}
+                            disabled={!editingProfile}
+                            className={editingProfile ? "" : "bg-muted"}
+                          />
                         </div>
                         <div>
                           <Label htmlFor="email">Email</Label>
-                          <Input id="email" value={advertiserProfile?.email || ""} readOnly />
+                          <Input id="email" value={advertiserProfile?.email || ""} disabled className="bg-muted" />
                         </div>
                         <div>
                           <Label htmlFor="phone">Phone Number</Label>
-                          <Input id="phone" value={advertiserProfile?.phone || ""} />
+                          <Input
+                            id="phone"
+                            value={editedPhone}
+                            onChange={(e) => setEditedPhone(e.target.value)}
+                            disabled={!editingProfile}
+                            className={editingProfile ? "" : "bg-muted"}
+                          />
                         </div>
                         <div>
-                          <Label htmlFor="location">Location</Label>
-                          <Input id="location" value={advertiserProfile?.location || ""} />
+                          <Label htmlFor="bio">Bio</Label>
+                          <Textarea
+                            id="bio"
+                            placeholder="Tell potential roommates about yourself..."
+                            value={editedBio}
+                            onChange={(e) => setEditedBio(e.target.value)}
+                            rows={4}
+                            disabled={!editingProfile}
+                            className={editingProfile ? "" : "bg-muted"}
+                          />
                         </div>
-                        <div>
-                          <Label htmlFor="accountType">Account Type</Label>
-                          <Select>
-                            <SelectTrigger>
-                              <SelectValue placeholder={advertiserProfile?.user_type || ""} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="student-owner">Student (Room Owner)</SelectItem>
-                              <SelectItem value="property-owner">Property Owner</SelectItem>
-                              <SelectItem value="agency">Real Estate Agency</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
+                       
                       </div>
                     </CardContent>
                   </Card>
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Account Settings</CardTitle>
+                      <CardTitle>About Me</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
                         <Label htmlFor="bio">Bio</Label>
-                        <Textarea id="bio" placeholder="Tell potential roommates about yourself..." rows={4} />
+                        <Textarea
+                          id="bio"
+                          placeholder="Tell potential roommates about yourself..."
+                          value={editedBio}
+                          onChange={(e) => setEditedBio(e.target.value)}
+                          rows={4}
+                          disabled={!editingProfile}
+                          className={editingProfile ? "" : "bg-muted"}
+                        />
                       </div>
 
                       <div className="space-y-3">
@@ -1473,6 +1618,7 @@ export default function AdvertiserDashboard() {
                                 id={`pref-${index}`}
                                 defaultChecked={index < 2}
                                 className="w-4 h-4 text-primary border-border rounded focus:ring-primary"
+                                disabled={!editingProfile} // Disable preferences when not editing
                               />
                               <Label htmlFor={`pref-${index}`} className="text-sm">
                                 {pref}
@@ -1482,10 +1628,12 @@ export default function AdvertiserDashboard() {
                         </div>
                       </div>
 
-                      <Button className="w-full bg-primary hover:bg-primary/90">Save Changes</Button>
+                      {editingProfile && (
+                        <Button type="submit" className="w-full bg-primary hover:bg-primary/90">Save Changes</Button>
+                      )}
                     </CardContent>
                   </Card>
-                </div>
+                </form>
               </div>
             )}
           </div>

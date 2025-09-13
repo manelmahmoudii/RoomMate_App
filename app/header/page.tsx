@@ -191,14 +191,14 @@ export default function Header({
               </>
             ) : (
               <div className="flex items-center space-x-4">
-                <Button 
+                {/* <Button 
                   variant="ghost" 
                   size="sm" 
                   className="transition-all duration-200 hover:scale-105" 
                   asChild
                 >
                   <Link href={getDashboardPath()}>Dashboard</Link>
-                </Button>
+                </Button> */}
                 <form action="/api/logout" method="POST">
                   <Button
                     size="sm"
@@ -290,7 +290,7 @@ export default function Header({
                 </div>
               ) : (
                 <div className="flex flex-col space-y-3">
-                  <Button 
+                  {/* <Button 
                     variant="outline" 
                     className="w-full justify-center transition-all duration-200 hover:scale-105" 
                     asChild
@@ -298,7 +298,7 @@ export default function Header({
                     <Link href={getDashboardPath()} onClick={closeMobileMenu}>
                       Dashboard
                     </Link>
-                  </Button>
+                  </Button> */}
                   <form action="/api/logout" method="POST" className="w-full">
                     <Button
                       className="w-full justify-center bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105"

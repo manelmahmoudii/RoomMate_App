@@ -391,7 +391,7 @@ export default function AdminDashboard() {
   }, []);
 
   const getAvatarDisplayUrl = (url: string | null | undefined) => url === null || url === undefined ? undefined : url;
-
+  
   const groupMessagesByConversation = (allMessages: Message[], currentUserId: string, allListings: Listing[], allAnnouncements: Announcement[]): Conversation[] => {
     const conversationsMap = new Map<string, Conversation>();
 
@@ -475,7 +475,7 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [setMessages]); // Only depends on setMessages
+  }, []); // Removed setMessages from dependency array
 
   const handleSendMessage = useCallback(async () => {
     if (!adminProfile?.id || !messageRecipientId || !contactMessage.trim()) {
@@ -664,13 +664,19 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (adminProfile?.id && messages.length > 0) {
       const grouped = groupMessagesByConversation(messages, adminProfile.id, listings, allAnnouncements);
-      setConversations(grouped);
+      // Only update conversations if they are actually different
+      if (JSON.stringify(grouped) !== JSON.stringify(conversations)) {
+        setConversations(grouped);
+      }
       if (selectedConversation) {
         const updatedSelected = grouped.find(conv => conv.id === selectedConversation.id);
-        setSelectedConversation(updatedSelected || null);
+        // Only update selectedConversation if it's actually different
+        if (updatedSelected && JSON.stringify(updatedSelected) !== JSON.stringify(selectedConversation)) {
+          setSelectedConversation(updatedSelected);
+        }
       }
     }
-  }, [messages, adminProfile?.id, listings, allAnnouncements, selectedConversation]);
+  }, [messages, adminProfile?.id, listings, allAnnouncements, conversations, selectedConversation?.id]); // Removed selectedConversation from dependencies after using stringify for comparison
 
   const getListingImageUrl = (images: string | null) => {
     if (!images) return "/placeholder.svg";
@@ -1397,7 +1403,12 @@ export default function AdminDashboard() {
                     {!loading && conversations.map(conversation => {
                       return (
                       <Card key={conversation.id} className="hover:shadow-lg transition-shadow duration-300 ease-in-out cursor-pointer"
-                        onClick={() => setSelectedConversation(conversation)}>
+                        onClick={() => {
+                          setSelectedConversation(conversation);
+                          setMessageRecipientId(conversation.participant.id);
+                          setMessageContextId(conversation.contextId);
+                          setMessageContextType(conversation.contextType);
+                        }}>
                         <CardContent className="p-4 flex items-start gap-4">
                           <Avatar className="w-12 h-12">
                             <AvatarImage src={getAvatarDisplayUrl(conversation.participant.avatar_url)} />

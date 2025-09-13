@@ -7,6 +7,7 @@ import './globals.css'
 import { getUserSession } from '@/lib/auth' // Import auth utility
 import { cookies } from 'next/headers' // Import cookies for server-side cookie access
 import HeaderClientWrapper from '@/app/components/HeaderClientWrapper'; // Import the new client wrapper
+import ProgressBar from '@/app/components/ProgressBar'; // Import ProgressBar
 
 export const metadata: Metadata = {
   title: 'RoomMate App',
@@ -33,6 +34,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
+        <ProgressBar /> {/* Add ProgressBar component here */}
         <HeaderClientWrapper 
           isLoggedIn={isLoggedIn} 
           userRole={userRole} 

@@ -11,6 +11,8 @@ import { Slider } from "@/components/ui/slider"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Search, MapPin, Users, Star, Heart, Filter, SlidersHorizontal, Grid3X3, List, ArrowUpDown } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation";
+import { fetchWithAuth } from "@/lib/fetchWithAuth";
 
 interface Listing {
   id: string;
@@ -33,6 +35,7 @@ interface Listing {
   first_name: string;
   last_name: string;
   user_type: string; // From joined users table
+  is_favorited?: boolean;
 }
 
 export default function SearchPage() {
@@ -41,12 +44,17 @@ export default function SearchPage() {
   const [priceRange, setPriceRange] = useState([200, 800])
   const [listings, setListings] = useState<Listing[]>([])
   const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<{
+    id: string;
+    email: string;
+    role: string;
+  } | null>(null);
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCity, setSelectedCity] = useState("all")
   const [selectedRoommates, setSelectedRoommates] = useState("any")
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [sortBy, setSortBy] = useState("newest")
+  const router = useRouter();
 
   const parseJsonSafely = (jsonString: string | null | any, defaultValue: any) => {
     if (jsonString === null || jsonString === undefined) return defaultValue;
@@ -64,7 +72,22 @@ export default function SearchPage() {
 
   useEffect(() => {
     fetchListings();
-  }, [searchTerm, selectedCity, selectedRoommates, priceRange, verifiedOnly, sortBy]);
+  }, [searchTerm, selectedCity, selectedRoommates, priceRange, verifiedOnly, sortBy, user]);
+
+  useEffect(() => {
+    const fetchUserSession = async () => {
+      try {
+        const response = await fetchWithAuth(router, "/api/auth/session");
+        if (response.ok) {
+          const data = await response.json();
+          setUser(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user session:", error);
+      }
+    };
+    fetchUserSession();
+  }, [router]);
 
   const fetchListings = async () => {
     setLoading(true);
@@ -77,6 +100,7 @@ export default function SearchPage() {
       params.append("max_price", priceRange[1].toString());
       if (verifiedOnly) params.append("verified", "true"); // Assuming a 'verified' column or logic in API
       params.append("sort_by", sortBy);
+      if (user?.id) params.append("userId", user.id);
 
       const response = await fetch(`/api/listings?${params.toString()}`);
       if (response.ok) {
@@ -92,7 +116,35 @@ export default function SearchPage() {
     }
   };
 
-  const ListingCard = ({ listing, isListView = false }: { listing: Listing; isListView?: boolean }) => {
+  const handleToggleFavorite = async (listingId: string) => {
+    if (!user) {
+      router.push("/auth/login"); // Redirect to login if not logged in
+      return;
+    }
+    try {
+      const response = await fetchWithAuth(router, "/api/student/favorites/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId }),
+      });
+      if (response.ok) {
+        const { message, favorited } = await response.json();
+        // Optimistically update the listings state
+        setListings(prevListings =>
+          prevListings.map(listing =>
+            listing.id === listingId ? { ...listing, is_favorited: favorited } : listing
+          )
+        );
+        console.log(message);
+      } else {
+        console.error("Failed to toggle favorite");
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error);
+    }
+  };
+
+  const ListingCard = ({ listing, isListView = false, onToggleFavorite }: { listing: Listing; isListView?: boolean; onToggleFavorite: (listingId: string) => void }) => {
     const imageUrls = parseJsonSafely(listing.images, []);
     const amenitiesList = parseJsonSafely(listing.amenities, []);
     const displayedAmenities = amenitiesList.slice(0, isListView ? 6 : 4);
@@ -115,8 +167,12 @@ export default function SearchPage() {
             size="icon"
             variant="ghost"
             className="absolute top-3 right-3 bg-background/80 hover:bg-background"
+            onClick={(e) => {
+              e.preventDefault();
+              onToggleFavorite(listing.id);
+            }}
           >
-            <Heart className="w-4 h-4" />
+            <Heart className={`w-4 h-4 ${listing.is_favorited ? "fill-red-500 text-red-500" : "text-muted-foreground"}`} />
           </Button>
           <Badge className="absolute bottom-3 left-3 bg-primary text-primary-foreground">{listing.price} TND/month</Badge>
           {listing.user_type === "advertiser" && (
@@ -370,7 +426,12 @@ export default function SearchPage() {
                 className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6" : "space-y-6"}
               >
                 {listings.map((listing) => (
-                  <ListingCard key={listing.id} listing={listing} isListView={viewMode === "list"} />
+                  <ListingCard
+                    key={listing.id}
+                    listing={listing}
+                    isListView={viewMode === "list"}
+                    onToggleFavorite={handleToggleFavorite}
+                  />
                 ))}
               </div>
             ) : (

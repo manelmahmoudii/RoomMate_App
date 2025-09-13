@@ -20,14 +20,24 @@ export async function GET(request: NextRequest) {
     connection = await getConnection();
     const searchParams = request.nextUrl.searchParams;
     
-    let query = "SELECT l.id, l.owner_id, l.title, l.description, l.price, l.city, l.address, l.latitude, l.longitude, l.room_type, l.number_of_roommates, l.amenities, l.images, l.available_from, l.status, l.views_count, l.created_at, u.first_name, u.last_name, u.user_type FROM listings l JOIN users u ON l.owner_id = u.id WHERE 1=1";
+    let query = `
+      SELECT
+        l.id, l.owner_id, l.title, l.description, l.price, l.city, l.address, l.latitude, l.longitude, l.room_type, l.number_of_roommates, l.amenities, l.images, l.available_from, l.status, l.views_count, l.created_at,
+        u.first_name, u.last_name, u.user_type,
+        CASE WHEN f.listing_id IS NOT NULL THEN TRUE ELSE FALSE END AS is_favorited
+      FROM listings l
+      JOIN users u ON l.owner_id = u.id
+      LEFT JOIN favorites f ON l.id = f.listing_id AND f.user_id = ?
+      WHERE l.status = 'active'
+    `;
     const params: (string | number)[] = [];
 
+    // Add userId to params for the LEFT JOIN condition
+    params.push(decodedToken?.id || null); // Push null if not logged in to still allow listing fetch
+
     if (decodedToken?.role === "advertiser") {
-      query += " AND l.owner_id = ?";
+      query += " AND l.owner_id = ?"; // For advertiser to see their own listings even if pending (if needed)
       params.push(decodedToken.id);
-    } else {
-      query += " AND l.status = 'active'";
     }
 
     // Apply filters from search parameters

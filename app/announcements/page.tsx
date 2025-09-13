@@ -413,10 +413,13 @@ export default function AnnouncementsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Avatar className="w-6 h-6">
-                          <AvatarImage src={announcement.avatar_url || "/placeholder.svg"} />
-                          <AvatarFallback className="text-xs">
-                            {announcement.first_name?.[0]}{announcement.last_name?.[0]}
-                          </AvatarFallback>
+                          {announcement.avatar_url ? (
+                            <AvatarImage src={announcement.avatar_url} />
+                          ) : (
+                            <AvatarFallback className="text-sm bg-muted text-foreground flex items-center justify-center font-bold">
+                              {announcement.first_name?.[0]}{announcement.last_name?.[0]}
+                            </AvatarFallback>
+                          )}
                         </Avatar>
                         <div className="text-xs">
                           <div className="font-medium text-foreground">
