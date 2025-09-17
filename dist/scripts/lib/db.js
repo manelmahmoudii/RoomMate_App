@@ -1,46 +1,39 @@
 import mysql from "mysql2/promise";
 import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
-
 const DB_HOST = process.env.DB_HOST || "localhost";
 const DB_USER = process.env.DB_USER || "root";
-const DB_PASSWORD = process.env.DB_PASSWORD || "Manel@2024#";
+const DB_PASSWORD = process.env.DB_PASSWORD || "";
 const DB_NAME = process.env.DB_NAME || "colocation_db";
-
-let pool: mysql.Pool | null = null;
-
+let pool = null;
 async function initializePool() {
-  pool = mysql.createPool({
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PASSWORD,
-    database: DB_NAME,
-    waitForConnections: true,
-    connectionLimit: 20, // Increased connection limit
-    queueLimit: 100, // Increased queue limit to allow connections to wait
-  });
+    pool = mysql.createPool({
+        host: DB_HOST,
+        user: DB_USER,
+        password: DB_PASSWORD,
+        database: DB_NAME,
+        waitForConnections: true,
+        connectionLimit: 20, // Increased connection limit
+        queueLimit: 100, // Increased queue limit to allow connections to wait
+    });
 }
-
 export async function getConnection() {
-  if (!pool) {
-    await initializePool();
-  }
-  return await pool!.getConnection();
+    if (!pool) {
+        await initializePool();
+    }
+    return await pool.getConnection();
 }
-
 export async function initDB() {
-  const connection = await mysql.createConnection({
-    host: DB_HOST,
-    user: DB_USER,
-    password: DB_PASSWORD,
-  });
-
-  // Création de la base de données si elle n'existe pas
-  await connection.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`;`);
-  await connection.query(`USE \`${DB_NAME}\`;`);
-
-  // Chaque table est créée séparément
-  await connection.query(`
+    const connection = await mysql.createConnection({
+        host: DB_HOST,
+        user: DB_USER,
+        password: DB_PASSWORD,
+    });
+    // Création de la base de données si elle n'existe pas
+    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\`;`);
+    await connection.query(`USE \`${DB_NAME}\`;`);
+    // Chaque table est créée séparément
+    await connection.query(`
     CREATE TABLE IF NOT EXISTS users (
       id CHAR(36) PRIMARY KEY,
       email VARCHAR(255) NOT NULL UNIQUE,
@@ -60,8 +53,7 @@ export async function initDB() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
   `);
-
-  await connection.query(`
+    await connection.query(`
     CREATE TABLE IF NOT EXISTS listings (
       id CHAR(36) PRIMARY KEY,
       owner_id CHAR(36) NOT NULL,
@@ -85,8 +77,7 @@ export async function initDB() {
       FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
-
-  await connection.query(`
+    await connection.query(`
     CREATE TABLE IF NOT EXISTS roommate_requests (
       id CHAR(36) PRIMARY KEY,
       listing_id CHAR(36) NOT NULL,
@@ -100,8 +91,7 @@ export async function initDB() {
       FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
-
-  await connection.query(`
+    await connection.query(`
     CREATE TABLE IF NOT EXISTS favorites (
       id CHAR(36) PRIMARY KEY,
       user_id CHAR(36) NOT NULL,
@@ -112,8 +102,7 @@ export async function initDB() {
       FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
     )
   `);
-
-  await connection.query(`
+    await connection.query(`
     CREATE TABLE IF NOT EXISTS comments (
       id CHAR(36) PRIMARY KEY,
       listing_id CHAR(36) NOT NULL,
@@ -127,8 +116,7 @@ export async function initDB() {
       FOREIGN KEY (parent_id) REFERENCES comments(id) ON DELETE CASCADE
     )
   `);
-
-  await connection.query(`
+    await connection.query(`
     CREATE TABLE IF NOT EXISTS announcements (
       id CHAR(36) PRIMARY KEY,
       user_id CHAR(36) NOT NULL,
@@ -145,38 +133,30 @@ export async function initDB() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
   `);
-
-  await connection.query(`
+    await connection.query(`
     CREATE TABLE IF NOT EXISTS messages (
       id CHAR(36) PRIMARY KEY,
       sender_id CHAR(36) NOT NULL,
       receiver_id CHAR(36) NOT NULL,
       listing_id CHAR(36),
-      announcement_id CHAR(36),
       content TEXT NOT NULL,
       is_read BOOLEAN DEFAULT false,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL,
-      FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE SET NULL
+      FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL
     )
   `);
-
-  // Create default admin user if not exists
-  const [adminRows] = await connection.query("SELECT id FROM users WHERE user_type = 'admin' AND email = 'admin@roommateTN.com'");
-  
-  if (Array.isArray(adminRows) && adminRows.length === 0) {
-    const adminId = uuidv4();
-    const hashedPassword = await bcrypt.hash("adminpassword", 10); // Hash a default admin password
-    await connection.query(
-      "INSERT INTO users (id, email, first_name, last_name, password, user_type) VALUES (?, ?, ?, ?, ?, ?)",
-      [adminId, "admin@roommateTN.com", "Admin", "User", hashedPassword, "admin"]
-    );
-    console.log("Default admin user created.");
-  } else {
-    console.log("Admin user already exists.");
-  }
-
-  await connection.end();
+    // Create default admin user if not exists
+    const [adminRows] = await connection.query("SELECT id FROM users WHERE user_type = 'admin' AND email = 'admin@roommateTN.com'");
+    if (Array.isArray(adminRows) && adminRows.length === 0) {
+        const adminId = uuidv4();
+        const hashedPassword = await bcrypt.hash("adminpassword", 10); // Hash a default admin password
+        await connection.query("INSERT INTO users (id, email, first_name, last_name, password, user_type) VALUES (?, ?, ?, ?, ?, ?)", [adminId, "admin@roommateTN.com", "Admin", "User", hashedPassword, "admin"]);
+        console.log("Default admin user created.");
+    }
+    else {
+        console.log("Admin user already exists.");
+    }
+    await connection.end();
 }

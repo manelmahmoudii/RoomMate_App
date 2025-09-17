@@ -2,11 +2,12 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "outDir": "./dist/scripts",
+    "outDir": "./dist",
+    "rootDir": ".",
     "module": "esnext",
     "target": "es2020",
     "moduleResolution": "bundler"
   },
-  "include": ["scripts/**/*.mts"],
+  "include": ["scripts/**/*.ts", "scripts/**/*.mts", "lib/**/*.ts"],
   "exclude": ["node_modules"]
 }

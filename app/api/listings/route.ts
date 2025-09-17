@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       LEFT JOIN favorites f ON l.id = f.listing_id AND f.user_id = ?
       WHERE l.status = 'active'
     `;
-    const params: (string | number)[] = [];
+    const params: (string | number | null)[] = [];
 
     // Add userId to params for the LEFT JOIN condition
     params.push(decodedToken?.id || null); // Push null if not logged in to still allow listing fetch
@@ -127,6 +127,13 @@ export async function POST(request: NextRequest) {
     }
     const { title, description, price, city, number_of_roommates, amenities, images } = await request.json();
     if (!title || !description || !price || !city || !number_of_roommates) {
+      console.error("Missing required listing fields:", {
+        title: !!title,
+        description: !!description,
+        price: !!price,
+        city: !!city,
+        number_of_roommates: !!number_of_roommates,
+      });
       return NextResponse.json({ error: "Missing required listing fields" }, { status: 400 });
     }
     const listingId = uuidv4();

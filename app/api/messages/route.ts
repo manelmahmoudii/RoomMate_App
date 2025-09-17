@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
        JOIN users r ON m.receiver_id = r.id
        LEFT JOIN listings l ON m.listing_id = l.id
        LEFT JOIN announcements a ON m.announcement_id = a.id
-       WHERE (m.sender_id = ? OR m.receiver_id = ?) AND m.is_deleted = FALSE
+       WHERE (m.sender_id = ? OR m.receiver_id = ?)
        ORDER BY m.created_at DESC`,
       [userId, userId]
     );

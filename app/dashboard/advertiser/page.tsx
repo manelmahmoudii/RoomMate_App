@@ -601,15 +601,29 @@ export default function AdvertiserDashboard() {
     }
 
     try {
+      const price = parseFloat(newListingForm.price);
+      if (isNaN(price) || price <= 0) {
+        toast.error("Price must be a positive number.");
+        setLoading(false);
+        return;
+      }
+
+      const numberOfRoommates = parseInt(newListingForm.number_of_roommates);
+      if (isNaN(numberOfRoommates) || numberOfRoommates <= 0) {
+        toast.error("Number of roommates must be a positive integer.");
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch("/api/listings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newListingForm.title,
           description: newListingForm.description,
-          price: parseFloat(newListingForm.price),
+          price: price,
           city: newListingForm.city,
-          number_of_roommates: parseInt(newListingForm.number_of_roommates),
+          number_of_roommates: numberOfRoommates,
           amenities: newListingForm.amenities, 
           images: imageUrl ? [imageUrl] : [],
         }),
